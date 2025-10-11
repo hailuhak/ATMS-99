@@ -580,30 +580,6 @@ export const CourseManagement: React.FC = () => {
               </div>
             </div>
 
-            {/* Materials */}
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add Material"
-                  value={newMaterial}
-                  onChange={(e) => setNewMaterial(e.target.value)}
-                />
-                <Button onClick={handleAddMaterial}>Add</Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(editingCourse ? editingCourse.materials || [] : newCourse.materials || []).map(
-                  (mat, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded px-2 py-1"
-                    >
-                      {mat}
-                      <X className="cursor-pointer" onClick={() => handleRemoveMaterial(idx)} />
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
           </div>
 
           <div className="flex justify-end gap-3 mt-6">

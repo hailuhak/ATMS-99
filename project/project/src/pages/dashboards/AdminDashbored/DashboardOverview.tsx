@@ -34,7 +34,7 @@ export const DashboardOverview: React.FC = () => {
           title: data.title,
           instructorId: data.instructorId,
           instructorName: data.instructorName,
-          hours: data.duration || 0,
+          hours: data.hours || 0,
           level: data.level || "beginner",
           category: data.category || "",
           startDate: data.startDate?.toDate ? data.startDate.toDate() : new Date(),

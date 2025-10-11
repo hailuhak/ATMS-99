@@ -32,9 +32,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
-  /**
-   * 🔹 1) Fetch sessions for the current trainer
-   */
+  // 1️⃣ Fetch sessions for current trainer
   useEffect(() => {
     if (!currentUser) return;
 
@@ -43,24 +41,20 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
         const snap = await getDocs(
           query(collection(db, "trainingSessions"), where("trainerId", "==", currentUser.uid))
         );
-
         const list: TrainingSession[] = snap.docs.map((d) => ({
           ...(d.data() as TrainingSession),
           id: d.id,
         }));
-
         setSessions(list);
       } catch (err) {
-        console.error("❌ Error fetching sessions:", err);
+        console.error("Error fetching sessions:", err);
       }
     };
 
     fetchSessions();
   }, [currentUser]);
 
-  /**
-   * 🔹 2) When a session is selected, fetch its details + trainees
-   */
+  // 2️⃣ Fetch trainees when session is selected
   useEffect(() => {
     if (!selectedSessionId) return;
 
@@ -78,12 +72,12 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
         });
 
         if (!sessionData) {
-          console.warn("⚠️ No session found for ID:", selectedSessionId);
           setTrainees([]);
+          console.warn("No session found for ID:", selectedSessionId);
           return;
         }
 
-        // b) Save session date
+        // b) Set session date
         if (sessionData.date) {
           setSessionDate(
             sessionData.date instanceof Timestamp
@@ -92,66 +86,64 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
           );
         }
 
-        // c) Fetch trainees using courseId → enrollments (using `courseIds` array)
+        // c) Fetch enrolled users
         if (sessionData.courseId) {
           const enrollmentSnap = await getDocs(
-            query(
-              collection(db, "enrollments"),
-              where("courseIds", "array-contains", sessionData.courseId)
-            )
+            query(collection(db, "enrollments"), where("courseId", "==", sessionData.courseId))
           );
 
           const userIds = enrollmentSnap.docs.map((d) => d.data().userId);
+          if (userIds.length === 0) {
+            setTrainees([]);
+            return;
+          }
 
-          if (userIds.length > 0) {
-            // Firestore "in" only supports up to 10 IDs, so batch if needed
-            const batchSize = 10;
-            const usersList: any[] = [];
+          // Firestore "in" supports max 10 IDs per query
+          const batchSize = 10;
+          const usersList: { id: string; name: string; email: string }[] = [];
 
-            for (let i = 0; i < userIds.length; i += batchSize) {
-              const batchIds = userIds.slice(i, i + batchSize);
-              const usersSnap = await getDocs(
-                query(collection(db, "users"), where("__name__", "in", batchIds))
-              );
+          for (let i = 0; i < userIds.length; i += batchSize) {
+            const batchIds = userIds.slice(i, i + batchSize);
+            const usersSnap = await getDocs(
+              query(collection(db, "users"), where("uid", "in", batchIds))
+            );
 
-              usersSnap.docs.forEach((d) =>
-                usersList.push({
-                  id: d.id,
-                  name: d.data().displayName || d.data().name || "Unknown",
-                  email: d.data().email || "N/A",
-                })
-              );
-            }
+            usersSnap.docs.forEach((d) => {
+              const data = d.data();
+              usersList.push({
+                id: data.uid,
+                name: data.displayName || "Unknown",
+                email: data.email || "N/A",
+              });
+            });
+          }
 
-            setTrainees(usersList);
+          setTrainees(usersList);
 
-            // d) Ensure attendance records exist
-            for (const trainee of usersList) {
-              const attQuery = query(
+          // d) Ensure attendance records exist
+          for (const trainee of usersList) {
+            const attSnap = await getDocs(
+              query(
                 collection(db, "attendance"),
                 where("sessionId", "==", selectedSessionId),
                 where("studentId", "==", trainee.id)
-              );
+              )
+            );
 
-              const attSnap = await getDocs(attQuery);
-
-              if (attSnap.empty) {
-                const newRef = doc(collection(db, "attendance"));
-                await setDoc(newRef, {
-                  sessionId: selectedSessionId,
-                  studentId: trainee.id,
-                  studentName: trainee.name,
-                  status: "absent",
-                  timestamp: serverTimestamp(),
-                });
-              }
+            if (attSnap.empty) {
+              const newRef = doc(collection(db, "attendance"));
+              await setDoc(newRef, {
+                sessionId: selectedSessionId,
+                studentId: trainee.id,
+                studentName: trainee.name,
+                status: "absent",
+                timestamp: serverTimestamp(),
+              });
             }
-          } else {
-            setTrainees([]);
           }
         }
       } catch (err) {
-        console.error("❌ Error fetching session/trainees:", err);
+        console.error("Error fetching trainees:", err);
         setTrainees([]);
       } finally {
         setLoading(false);
@@ -161,20 +153,14 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
     fetchSessionAndTrainees();
   }, [selectedSessionId]);
 
-  /**
-   * 🔹 3) Real-time attendance listener
-   */
+  // 3️⃣ Real-time attendance listener
   useEffect(() => {
     if (!selectedSessionId) return;
 
     const q = query(collection(db, "attendance"), where("sessionId", "==", selectedSessionId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...doc.data(),
-          } as AttendanceRecord)
+        (doc) => ({ id: doc.id, ...(doc.data() as AttendanceRecord) })
       );
       setRecords(data);
     });
@@ -182,9 +168,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
     return () => unsubscribe();
   }, [selectedSessionId]);
 
-  /**
-   * 🔹 4) Toggle attendance
-   */
+  // 4️⃣ Toggle attendance
   const toggleAttendance = async (record: AttendanceRecord) => {
     if (!record.id) return;
     const ref = doc(db, "attendance", record.id);
@@ -196,9 +180,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-        Attendance Management
-      </h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Attendance Management</h1>
 
       {/* Session Selector */}
       <div>
@@ -213,10 +195,9 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
           <option value="">-- Choose a session --</option>
           {sessions.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.title || s.courseName || "Untitled"} —{" "}
-              {s.date instanceof Timestamp
-                ? s.date.toDate().toDateString()
-                : (s.date as Date)?.toDateString()}
+              {s.courseName
+ || "Untitled"} —{" "}
+              {s.date instanceof Timestamp ? s.date.toDate().toDateString() : (s.date as Date)?.toDateString()}
             </option>
           ))}
         </select>
@@ -228,9 +209,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
           {sessionDate && (
             <p className="text-gray-700 dark:text-gray-300 mb-2">
               Session Date:{" "}
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                {sessionDate.toDateString()}
-              </span>
+              <span className="font-medium text-gray-900 dark:text-gray-100">{sessionDate.toDateString()}</span>
             </p>
           )}
 
@@ -241,9 +220,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
               ) : trainees.length === 0 ? (
                 <div className="text-center py-12">
                   <CheckSquare className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">
-                    No trainees enrolled in this course.
-                  </p>
+                  <p className="text-gray-500 dark:text-gray-400">No trainees enrolled in this course.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -260,24 +237,15 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
                       {trainees.map((trainee) => {
                         const record = records.find((r) => r.studentId === trainee.id);
                         return (
-                          <tr
-                            key={trainee.id}
-                            className="text-center odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800"
-                          >
-                            <td className="p-3 border text-gray-800 dark:text-gray-200">
-                              {trainee.name}
-                            </td>
-                            <td className="p-3 border text-gray-600 dark:text-gray-300">
-                              {trainee.email}
-                            </td>
+                          <tr key={trainee.id} className="text-center odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800">
+                            <td className="p-3 border text-gray-800 dark:text-gray-200">{trainee.name}</td>
+                            <td className="p-3 border text-gray-600 dark:text-gray-300">{trainee.email}</td>
                             <td className="p-3 border">
-                              <span
-                                className={`px-2 py-1 rounded text-sm font-medium ${
-                                  record?.status === "present"
-                                    ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                                    : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-                                }`}
-                              >
+                              <span className={`px-2 py-1 rounded text-sm font-medium ${
+                                record?.status === "present"
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                  : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                              }`}>
                                 {record?.status === "present" ? "Present" : "Absent"}
                               </span>
                             </td>
@@ -300,9 +268,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ sessionId: propSessionId
           </Card>
         </>
       ) : (
-        <p className="text-lg text-gray-700 dark:text-gray-300">
-          Please select a session to view attendance.
-        </p>
+        <p className="text-lg text-gray-700 dark:text-gray-300">Please select a session to view attendance.</p>
       )}
     </div>
   );
