@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Users, BookOpen, TrendingUp, Activity } from "lucide-react";
 import { db } from "../../../lib/firebase";
-import { collection, query, orderBy, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, Timestamp, doc, updateDoc } from "firebase/firestore";
 import { Course, ActivityLog } from "../../../types";
 
 export const DashboardOverview: React.FC = () => {
@@ -19,65 +19,77 @@ export const DashboardOverview: React.FC = () => {
   const [logsLoading, setLogsLoading] = useState(true);
 
   useEffect(() => {
-    // Users count listener
+    // --- Users count listener ---
     const unsubscribeUsers = onSnapshot(collection(db, "users"), (snapshot) => {
       setUsersCount(snapshot.size);
     });
 
-    // Courses listener
+    // --- Courses listener ---
     const coursesQuery = query(collection(db, "courses"), orderBy("createdAt", "desc"));
-    const unsubscribeCourses = onSnapshot(coursesQuery, (snapshot) => {
-      const formattedCourses = snapshot.docs.map((doc) => {
-        const data = doc.data() as any;
-        return {
-          id: doc.id,
-          title: data.title,
-          instructorId: data.instructorId,
-          instructorName: data.instructorName,
-          hours: data.hours || 0,
-          level: data.level || "beginner",
-          category: data.category || "",
-          startDate: data.startDate?.toDate ? data.startDate.toDate() : new Date(),
-          endDate: data.endDate?.toDate ? data.endDate.toDate() : new Date(),
-          materials: data.materials || [],
-          status: data.status || "active",
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(),
-        } as Course;
-      });
+    const unsubscribeCourses = onSnapshot(coursesQuery, async (snapshot) => {
+      const now = new Date();
+      const formattedCourses: Course[] = await Promise.all(
+        snapshot.docs.map(async (docSnapshot) => {
+          const data = docSnapshot.data() as any;
+          const startDate = data.startDate?.toDate ? data.startDate.toDate() : new Date();
+          const endDate = data.endDate?.toDate ? data.endDate.toDate() : new Date();
+          let status = data.status || "active";
+
+          // Automatically mark as completed if endDate has passed
+          if (endDate < now && status !== "completed") {
+            status = "completed";
+            try {
+              await updateDoc(doc(db, "courses", docSnapshot.id), { status: "completed" });
+            } catch (error) {
+              console.error("Failed to update course status:", error);
+            }
+          }
+
+          return {
+            id: docSnapshot.id,
+            title: data.title,
+            instructorId: data.instructorId,
+            instructorName: data.instructorName,
+            hours: data.hours || 0,
+            level: data.level || "beginner",
+            category: data.category || "",
+            startDate,
+            endDate,
+            materials: data.materials || [],
+            status,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(),
+          } as Course;
+        })
+      );
+
       setCourses(formattedCourses);
       setCoursesLoading(false);
     });
 
-    // Activity logs listener
+    // --- Activity logs listener ---
     const logsQuery = query(collection(db, "activityLogs"), orderBy("timestamp", "desc"));
-  const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
-  const activityData = snapshot.docs.map((doc) => {
-    const data = doc.data();
-    console.log('Raw activity log data:', data); // optional debug log
+    const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
+      const activityData: ActivityLog[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          userName: data.userName || data.user || "Unknown User",
+          userId: data.userId || "",
+          userRole: data.userRole || "trainee",
+          trainerId: data.trainerId || "",
+          action: data.action || "",
+          target: data.target || "",
+          details: data.details || data.description || "",
+          timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(data.timestamp),
+        } as ActivityLog;
+      });
 
-    return {
-      id: doc.id,
-      userName: data.userName || data.user || 'Unknown User',
-      userId: data.userId || '',
-      userRole: data.userRole || 'trainee',
-      trainerId: data.trainerId || '',
-      action: data.action || '',
-      target: data.target || '',
-      details: data.details || data.description || '',
-      timestamp: data.timestamp instanceof Timestamp
-        ? data.timestamp.toDate()
-        : new Date(data.timestamp),
-    } as ActivityLog;
-  });
+      setLogs(activityData.slice(0, 3));
+      setLogsLoading(false);
+    });
 
-  console.log('Processed activity data:', activityData); // optional debug log
-
-  setLogs(activityData.slice(0, 3));
-  setLogsLoading(false);
-});
-
-
+    // --- Cleanup listeners ---
     return () => {
       unsubscribeUsers();
       unsubscribeCourses();
@@ -85,7 +97,7 @@ export const DashboardOverview: React.FC = () => {
     };
   }, []);
 
-  // Derived stats
+  // --- Derived stats ---
   const completionRate = courses.length
     ? Math.round((courses.filter((c) => c.status === "completed").length / courses.length) * 100)
     : 0;
@@ -114,6 +126,7 @@ export const DashboardOverview: React.FC = () => {
 
       {/* Recent Courses & Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Courses */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
@@ -141,6 +154,8 @@ export const DashboardOverview: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Recent Activity */}
         <div>
           <RecentActivity logs={logs} loading={logsLoading} />
         </div>

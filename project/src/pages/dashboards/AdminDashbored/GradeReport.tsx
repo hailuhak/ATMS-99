@@ -49,14 +49,13 @@ interface GradeRecord {
   courses: GradeItem[];
   total: number;
   average: number;
-  cgpa: string;
 }
 
 export default function GradeReport() {
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Real-time listener for "grades" collection
+  // Real-time listener
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "grades"), (snapshot) => {
       const data: any[] = snapshot.docs.map((doc) => doc.data());
@@ -70,7 +69,6 @@ export default function GradeReport() {
             courses: [],
             total: 0,
             average: 0,
-            cgpa: "0.00",
           };
         }
 
@@ -85,20 +83,18 @@ export default function GradeReport() {
       Object.values(traineeMap).forEach((t) => {
         const total = t.courses.reduce((sum, c) => sum + c.grade, 0);
         const maxTotal = t.courses.length * 100;
-        const average = (total / maxTotal) * 100;
         t.total = total;
-        t.average = average;
-        t.cgpa = (average / 25).toFixed(2);
+        t.average = (total / maxTotal) * 100;
       });
 
       setGrades(Object.values(traineeMap));
       setLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener
+    return () => unsubscribe();
   }, []);
 
-  // ✅ Log activity to Firestore
+  // Log activity
   const logActivity = async (
     userName: string,
     action: string,
@@ -118,58 +114,56 @@ export default function GradeReport() {
     }
   };
 
-const handleSaveAll = async () => {
-  try {
-    for (const t of grades) {
-      const q = query(
-        collection(db, "finalGrade"),
-        where("traineeId", "==", t.traineeId)
-      );
-      const existingDocs = await getDocs(q);
+  // Save all grades
+  const handleSaveAll = async () => {
+    try {
+      for (const t of grades) {
+        const q = query(
+          collection(db, "finalGrade"),
+          where("traineeId", "==", t.traineeId)
+        );
+        const existingDocs = await getDocs(q);
 
-      if (!existingDocs.empty) {
-        const existingDoc = existingDocs.docs[0];
-        await setDoc(
-          doc(db, "finalGrade", existingDoc.id),
-          {
+        if (!existingDocs.empty) {
+          const existingDoc = existingDocs.docs[0];
+          await setDoc(
+            doc(db, "finalGrade", existingDoc.id),
+            {
+              traineeId: t.traineeId,
+              traineeName: t.traineeName,
+              courses: t.courses,
+              total: t.total,
+              average: t.average,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+        } else {
+          await setDoc(doc(collection(db, "finalGrade")), {
             traineeId: t.traineeId,
             traineeName: t.traineeName,
             courses: t.courses,
             total: t.total,
             average: t.average,
-            cgpa: t.cgpa,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      } else {
-        await setDoc(doc(collection(db, "finalGrade")), {
-          traineeId: t.traineeId,
-          traineeName: t.traineeName,
-          courses: t.courses,
-          total: t.total,
-          average: t.average,
-          cgpa: t.cgpa,
-          createdAt: serverTimestamp(),
-        });
+            createdAt: serverTimestamp(),
+          });
+        }
       }
+
+      await logActivity("Admin", "saved", "all final grades", "Grade report updated");
+      alert("✅ Grades saved successfully!");
+    } catch (error) {
+      console.error("Error saving grades:", error);
+      alert("❌ Failed to save grades. Check console for details.");
     }
-
-    await logActivity("Admin", "saved", "all final grades", "Grade report updated");
-    alert("✅ Grades saved successfully!");
-  } catch (error) {
-    console.error("Error saving grades:", error);
-    alert("❌ Failed to save grades. Check console for details.");
-  }
-};
-
+  };
 
   if (loading)
     return <div className="p-6 text-gray-700 dark:text-gray-300">Loading...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
           Grade Report
         </h2>
@@ -183,8 +177,9 @@ const handleSaveAll = async () => {
 
       <Card className="w-full max-w-7xl shadow-lg">
         <CardContent>
+          {/* Make table horizontally scrollable on small screens */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border border-gray-300 dark:border-gray-700">
+            <table className="w-full text-sm border border-gray-300 dark:border-gray-700 min-w-[600px] sm:min-w-full">
               <thead className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 sticky top-0 z-10">
                 <tr>
                   <th className="border px-4 py-2">Trainee</th>
@@ -193,7 +188,6 @@ const handleSaveAll = async () => {
                   <th className="border px-4 py-2">Letter Grade</th>
                   <th className="border px-4 py-2">Total</th>
                   <th className="border px-4 py-2">Average (%)</th>
-                  <th className="border px-4 py-2">CGPA</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,10 +211,11 @@ const handleSaveAll = async () => {
                     </td>
                     <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
                       {t.courses.map((c, idx) => (
-                        <div key={c.courseId}>
-                          <div className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-center">
-                            {c.grade}
-                          </div>
+                        <div
+                          key={c.courseId}
+                          className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-center"
+                        >
+                          {c.grade}
                           {idx < t.courses.length - 1 && (
                             <hr className="border-t border-gray-400 dark:border-gray-600 my-1" />
                           )}
@@ -229,14 +224,13 @@ const handleSaveAll = async () => {
                     </td>
                     <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
                       {t.courses.map((c, idx) => (
-                        <div key={c.courseId}>
-                          <div
-                            className={`px-2 py-1 rounded text-center ${getLetterGradeColor(
-                              c.grade
-                            )}`}
-                          >
-                            {c.letterGrade}
-                          </div>
+                        <div
+                          key={c.courseId}
+                          className={`px-2 py-1 rounded text-center ${getLetterGradeColor(
+                            c.grade
+                          )}`}
+                        >
+                          {c.letterGrade}
                           {idx < t.courses.length - 1 && (
                             <hr className="border-t border-gray-400 dark:border-gray-600 my-1" />
                           )}
@@ -248,9 +242,6 @@ const handleSaveAll = async () => {
                     </td>
                     <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
                       {t.average.toFixed(2)}%
-                    </td>
-                    <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
-                      {t.cgpa}
                     </td>
                   </tr>
                 ))}

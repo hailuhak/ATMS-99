@@ -1,22 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { motion } from "framer-motion";
-import { Calendar, Clock, BookOpen, CreditCard as Edit2, Trash2 } from "lucide-react";
+import { Clock, Calendar, BookOpen, CreditCard as Edit2, Trash2 } from "lucide-react";
 import { Course } from "../../types";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/Card";
 import { Button } from "../ui/Button";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../lib/firebase";
 
-interface CourseCardProps {
-  course: Course;
-  onEnroll?: () => void;
-  onEdit?: () => void;
-  onDelete?: () => void;
-  onView?: () => void;
-  showActions?: boolean;
-  className?: string; // optional className for custom styling
-}
-
+// Colors for levels and status
 const levelColors: Record<string, string> = {
   beginner: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   intermediate: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
@@ -35,9 +24,6 @@ const statusColors: Record<string, string> = {
 // Utility to format date
 export const formatDate = (value: any) => {
   if (!value) return "N/A";
-  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
-    return value.toDate().toLocaleDateString();
-  }
   if (value instanceof Date) return value.toLocaleDateString();
   try {
     return new Date(value).toLocaleDateString();
@@ -45,6 +31,16 @@ export const formatDate = (value: any) => {
     return "Invalid date";
   }
 };
+
+interface CourseCardProps {
+  course: Course;
+  onEnroll?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onView?: () => void;
+  showActions?: boolean;
+  className?: string;
+}
 
 export const CourseCard: React.FC<CourseCardProps> = ({
   course,
@@ -55,32 +51,8 @@ export const CourseCard: React.FC<CourseCardProps> = ({
   showActions = true,
   className = "",
 }) => {
-  const [sessionDates, setSessionDates] = useState<{ trainStart?: string; trainEnd?: string }>({});
-
-  useEffect(() => {
-    const fetchSessionDates = async () => {
-      try {
-        const sessionsSnap = await getDocs(collection(db, 'sessions'));
-        if (!sessionsSnap.empty) {
-          const sessionData = sessionsSnap.docs[0].data();
-          setSessionDates({
-            trainStart: sessionData.trainStart,
-            trainEnd: sessionData.trainEnd,
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching session dates:', error);
-      }
-    };
-
-    fetchSessionDates();
-  }, []);
-
   const levelColor = levelColors[course.level ?? "default"];
   const statusColor = statusColors[course.status ?? "default"];
-
-  const displayStartDate = sessionDates.trainStart || course.startDate;
-  const displayEndDate = sessionDates.trainEnd || course.endDate;
 
   return (
     <motion.div
@@ -116,7 +88,7 @@ export const CourseCard: React.FC<CourseCardProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-              {formatDate(displayStartDate)}
+              {formatDate(course.startDate)}
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -124,12 +96,11 @@ export const CourseCard: React.FC<CourseCardProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-              {displayEndDate ? formatDate(displayEndDate) : "N/A"}
+              {course.endDate ? formatDate(course.endDate) : "N/A"}
             </div>
           </div>
         </CardContent>
 
-        {/* Actions */}
         {showActions && (
           <CardFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-between mt-4">
             <div className="flex flex-1 gap-2 flex-wrap">
@@ -142,9 +113,7 @@ export const CourseCard: React.FC<CourseCardProps> = ({
 
             {onEnroll && course.status === "active" && (
               <div className="mt-2 sm:mt-0">
-                <Button size="sm" onClick={onEnroll}>
-                  Enroll Now
-                </Button>
+                <Button size="sm" onClick={onEnroll}>Enroll Now</Button>
               </div>
             )}
 
