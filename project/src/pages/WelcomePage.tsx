@@ -26,8 +26,8 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onGetStarted }) => {
     },
     {
       icon: Award,
-      title: 'Certification',
-      description: 'Earn recognized certifications upon successful completion of courses.',
+      title: 'Easy to Use',
+description: 'Our platform is designed with simplicity in mind, making it effortless for anyone to navigate and get started quickly.',
     },
   ];
 
@@ -115,7 +115,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onGetStarted }) => {
             Ready to Transform Your Training?
           </h2>
           <p className="text-xl opacity-90 mb-8 max-w-2xl mx-auto">
-            Join thousands of organizations already using ATMS to deliver exceptional audit training programs.
+                    ATMS is designed to help you manage your audit training programs efficiently and effectively.
           </p>
           <motion.div
             whileHover={{ scale: 1.05 }}
