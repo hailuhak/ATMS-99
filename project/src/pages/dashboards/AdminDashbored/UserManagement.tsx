@@ -96,7 +96,6 @@ export const UserManagement: React.FC = () => {
     }
 
     try {
-      // Check if email already exists
       const userRef = collection(db, "users");
       const q = query(userRef, where("email", "==", email));
       const snapshot = await getDocs(q);
@@ -106,7 +105,6 @@ export const UserManagement: React.FC = () => {
         return;
       }
 
-      // Create in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
@@ -122,14 +120,12 @@ export const UserManagement: React.FC = () => {
         createdAt: new Date(),
       };
 
-      // Save in Firestore users
       await setDoc(doc(db, "users", uid), {
         ...userData,
         lastLogin: new Date(),
         timestamp: serverTimestamp(),
       });
 
-      // Save pending role separately
       await setDoc(doc(db, "pendingUsers", uid), {
         uid,
         displayName,
@@ -138,7 +134,6 @@ export const UserManagement: React.FC = () => {
         timestamp: serverTimestamp(),
       });
 
-      // Log activity
       await addActivityLog(
         auth.currentUser?.displayName || "Admin",
         "added",
@@ -166,7 +161,6 @@ export const UserManagement: React.FC = () => {
         role: editingUser.role,
       });
 
-      // Update Firebase Auth if editing own email
       const currentUser = auth.currentUser;
       if (
         currentUser &&
@@ -176,7 +170,6 @@ export const UserManagement: React.FC = () => {
         await updateEmail(currentUser, editingUser.email);
       }
 
-      // Log activity
       await addActivityLog(
         auth.currentUser?.displayName || "Admin",
         "edited",
@@ -200,7 +193,6 @@ export const UserManagement: React.FC = () => {
       if (!user.id) return;
       await deleteDoc(doc(db, "users", user.id));
 
-      // Log activity
       await addActivityLog(
         auth.currentUser?.displayName || "Admin",
         "deleted",
@@ -245,9 +237,7 @@ export const UserManagement: React.FC = () => {
             <Input
               placeholder="Email"
               value={newUser.email}
-              onChange={(e) =>
-                setNewUser({ ...newUser, email: e.target.value })
-              }
+              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
             />
             <Input
               placeholder="Password"
@@ -273,10 +263,7 @@ export const UserManagement: React.FC = () => {
             </select>
             <div className="flex gap-2">
               <Button onClick={handleAddUser}>Save User</Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowAddUserForm(false)}
-              >
+              <Button variant="outline" onClick={() => setShowAddUserForm(false)}>
                 Cancel
               </Button>
             </div>
@@ -358,7 +345,7 @@ export const UserManagement: React.FC = () => {
                     >
                       <td className="px-4 py-2">{user.displayName || "N/A"}</td>
                       <td className="px-4 py-2">{user.email}</td>
-                      <td className="px-4 py-2">{user.role}</td>
+                      <td className="px-4 py-2 capitalize">{user.role}</td>
                       <td className="px-4 py-2">
                         {user.createdAt instanceof Date
                           ? user.createdAt.toLocaleDateString()
@@ -369,10 +356,13 @@ export const UserManagement: React.FC = () => {
                           className="w-5 h-5 text-blue-500 cursor-pointer hover:text-blue-700"
                           onClick={() => setEditingUser(user)}
                         />
-                        <Trash2
-                          className="w-5 h-5 text-red-500 cursor-pointer hover:text-red-700"
-                          onClick={() => handleDeleteUser(user)}
-                        />
+                        {/* 🔹 Hide Delete Icon if user is Admin */}
+                        {user.role !== "admin" && (
+                          <Trash2
+                            className="w-5 h-5 text-red-500 cursor-pointer hover:text-red-700"
+                            onClick={() => handleDeleteUser(user)}
+                          />
+                        )}
                       </td>
                     </tr>
                   ))}

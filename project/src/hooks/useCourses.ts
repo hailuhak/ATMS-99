@@ -19,12 +19,12 @@ export interface EnrollmentCourse {
   instructorId?: string;
   instructorName?: string;
   hours?: number;
-  level?: 'beginner' | 'intermediate' | 'advanced';
+  level?: "beginner" | "intermediate" | "advanced";
   category?: string;
   startDate?: Date;
   endDate?: Date;
   materials?: string[];
-  status: 'active' | 'draft' | 'completed' | 'cancelled';
+  status: "active" | "draft" | "completed" | "cancelled";
 }
 
 export interface Enrollment {
@@ -38,7 +38,7 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all courses in real-time
+  // Fetch all courses (real-time)
   useEffect(() => {
     const colRef = collection(db, "courses");
     const q = statusFilter ? query(colRef, where("status", "==", statusFilter)) : colRef;
@@ -54,27 +54,42 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
     return () => unsubscribe();
   }, [statusFilter]);
 
-  // Fetch the enrollment document for current user in real-time
+  // Fetch user enrollments (real-time)
   useEffect(() => {
     if (!currentUser) return;
 
     setLoading(true);
-
     const enrollmentRef = doc(db, "enrollments", currentUser.uid);
-    const unsubscribe = onSnapshot(enrollmentRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data() as Enrollment;
 
-        // Convert enrolledAt and other date fields to Date objects
-        const enrichedCourses: EnrollmentCourse[] = data.courses.map((c) => ({
+    const unsubscribe = onSnapshot(enrollmentRef, async (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as Enrollment;
+
+        // Convert date fields
+        let courses: EnrollmentCourse[] = data.courses.map((c) => ({
           ...c,
           enrolledAt: c.enrolledAt instanceof Date ? c.enrolledAt : new Date(c.enrolledAt),
           startDate: c.startDate ? new Date(c.startDate) : undefined,
           endDate: c.endDate ? new Date(c.endDate) : undefined,
         }));
 
-        setEnrollments({ userId: data.userId, courses: enrichedCourses });
-        setEnrolledCourseIds(enrichedCourses.map((c) => c.courseId));
+        // Auto-update completed courses
+        const now = new Date();
+        let needsUpdate = false;
+        courses = courses.map((c) => {
+          if (c.endDate && c.endDate < now && c.status === "active") {
+            needsUpdate = true;
+            return { ...c, status: "completed" };
+          }
+          return c;
+        });
+
+        if (needsUpdate) {
+          await updateDoc(enrollmentRef, { courses });
+        }
+
+        setEnrollments({ userId: data.userId, courses });
+        setEnrolledCourseIds(courses.map((c) => c.courseId));
       } else {
         setEnrollments(null);
         setEnrolledCourseIds([]);
@@ -86,7 +101,7 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Enroll a user in a course
+  // Enroll in a course
   const enrollCourse = useCallback(
     async (courseId: string) => {
       if (!currentUser) throw new Error("User not logged in");
@@ -112,10 +127,10 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
         status: course.status,
       };
 
-      const enrollmentSnap = await getDoc(enrollmentRef);
+      const snap = await getDoc(enrollmentRef);
 
-      if (enrollmentSnap.exists()) {
-        const data = enrollmentSnap.data() as Enrollment;
+      if (snap.exists()) {
+        const data = snap.data() as Enrollment;
         await updateDoc(enrollmentRef, { courses: [...data.courses, newEnrollment] });
       } else {
         const newData: Enrollment = { userId: currentUser.uid, courses: [newEnrollment] };
@@ -125,25 +140,23 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
     [currentUser, allCourses, enrolledCourseIds]
   );
 
-  // Unenroll a user from a course
+  // Unenroll from a course
   const unenrollCourse = useCallback(
     async (courseId: string) => {
       if (!currentUser) throw new Error("User not logged in");
 
       const enrollmentRef = doc(db, "enrollments", currentUser.uid);
-      const enrollmentSnap = await getDoc(enrollmentRef);
+      const snap = await getDoc(enrollmentRef);
+      if (!snap.exists()) return;
 
-      if (!enrollmentSnap.exists()) return;
-
-      const data = enrollmentSnap.data() as Enrollment;
+      const data = snap.data() as Enrollment;
       const updatedCourses = data.courses.filter((c) => c.courseId !== courseId);
-
       await updateDoc(enrollmentRef, { courses: updatedCourses });
     },
     [currentUser]
   );
 
-  // Get recent courses (last 2)
+  // Recent courses (last 2)
   const recentCourses = useMemo(() => {
     if (!enrollments) return [];
     return enrollments.courses

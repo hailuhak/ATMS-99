@@ -6,7 +6,7 @@ import { RecentActivity, ActivityLog } from "../../../components/Cards/RecentAct
 import { CourseCard } from "../../../components/courses/CourseCard";
 import { User, Course } from "../../../types";
 import { useCourses } from "../../../hooks/useCourses";
-import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 
 interface DashboardOverviewProps {
@@ -14,7 +14,7 @@ interface DashboardOverviewProps {
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUser }) => {
-  const { allCourses, enrolledCourseIds, enrollCourse, recentCourses } = useCourses(currentUser);
+  const { allCourses, enrollments, enrolledCourseIds, enrollCourse, unenrollCourse, recentCourses } = useCourses(currentUser);
 
   const [showForm, setShowForm] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<string>("");
@@ -23,32 +23,43 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
   const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
 
+  // Function to log activity
+  const logActivity = async (action: string, target: string, details?: string) => {
+    if (!currentUser) return;
+    const activityRef = doc(db, "activityLogs", `${currentUser.uid}_${Date.now()}`);
+    await setDoc(activityRef, {
+      userId: currentUser.uid,
+      userName: currentUser.displayName || "User",
+      action,
+      target,
+      details: details || "",
+      timestamp: new Date(),
+    });
+  };
+
+  // Fetch recent activities (last 4)
   useEffect(() => {
     if (!currentUser?.uid) return;
-
-    const q = query(
-      collection(db, "activityLogs"),
-      where("userId", "==", currentUser.uid),
-      orderBy("timestamp", "desc"),
-      limit(5)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const activities: ActivityLog[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          userName: data.userName || currentUser.displayName || "User",
-          action: data.action || "",
-          target: data.target || "",
-          details: data.details || "",
-          timestamp: data.timestamp?.toDate() || new Date(),
-        };
-      });
+    const activitiesCol = collection(db, "activityLogs");
+    const unsubscribe = onSnapshot(activitiesCol, (snapshot) => {
+      const activities: ActivityLog[] = snapshot.docs
+        .map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            userName: data.userName || currentUser.displayName || "User",
+            action: data.action || "",
+            target: data.target || "",
+            details: data.details || "",
+            timestamp: data.timestamp?.toDate() || new Date(),
+          };
+        })
+        .filter((a) => a.userName === (currentUser.displayName || "User"))
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, 4);
       setRecentActivities(activities);
       setLoadingActivities(false);
     });
-
     return () => unsubscribe();
   }, [currentUser]);
 
@@ -56,12 +67,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
     (course) => !enrolledCourseIds.includes(course.id) && course.status === "active"
   );
 
-  // Handle enrollment
+  // Enroll in a course
   const handleEnroll = async () => {
     if (!selectedCourse) return;
+    const course = allCourses.find((c) => c.id === selectedCourse);
+    if (!course) return;
 
     try {
       await enrollCourse(selectedCourse);
+      await logActivity("Enrolled in Course", course.title || "Unknown Course");
       setSuccessMessage("Successfully enrolled!");
       setShowSuccess(true);
       setShowForm(false);
@@ -72,6 +86,33 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     }
+  };
+
+  // Unenroll from a course
+  const handleUnenroll = async (courseId: string) => {
+    const course = allCourses.find((c) => c.id === courseId);
+    if (!course) return;
+
+    try {
+      await unenrollCourse(courseId);
+      await logActivity("Unenrolled from Course", course.title || "Unknown Course");
+    } catch (error) {
+      console.error("Failed to unenroll:", error);
+    }
+  };
+
+  // Mark lesson completion (example usage)
+  const handleLessonComplete = async (courseId: string, lessonName: string) => {
+    const course = allCourses.find((c) => c.id === courseId);
+    if (!course) return;
+    await logActivity("Completed Lesson", lessonName, `Course: ${course.title}`);
+  };
+
+  // Mark course completion (example usage)
+  const handleCourseComplete = async (courseId: string) => {
+    const course = allCourses.find((c) => c.id === courseId);
+    if (!course) return;
+    await logActivity("Completed Course", course.title || "Unknown Course");
   };
 
   return (
@@ -121,22 +162,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
                     You are not enrolled in any courses yet.
                   </p>
                 ) : (
-                  recentCourses.map((course) => (
-                    <CourseCard
-                      key={course.id} // ✅ Unique key for each course
-                      course={course}
-                      showActions={false}
-                      onView={() => console.log("View course:", course.id)}
-                    />
-                  ))
+                  recentCourses.map((enrolled) => {
+                    const course = allCourses.find((c) => c.id === enrolled.courseId);
+                    if (!course) return null;
+                    return (
+                      <CourseCard
+                        key={course.id}
+                        course={course}
+                        showActions={true}
+                        onUnenroll={() => handleUnenroll(course.id)}
+                        onLessonComplete={(lessonName: string) =>
+                          handleLessonComplete(course.id, lessonName)
+                        }
+                        onCourseComplete={() => handleCourseComplete(course.id)}
+                      />
+                    );
+                  })
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* Recent Activity */}
         <div>
-          <RecentActivity logs={recentActivities} loading={loadingActivities} limitCount={5} />
+          <RecentActivity logs={recentActivities} loading={loadingActivities} limitCount={4} />
         </div>
       </div>
 

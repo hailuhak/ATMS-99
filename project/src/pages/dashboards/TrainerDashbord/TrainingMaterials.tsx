@@ -21,6 +21,7 @@ import {
   query,
   where,
   Timestamp,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Course } from '../../../types';
@@ -70,16 +71,27 @@ export const TrainingMaterials: React.FC = () => {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
   };
 
+  // -------------------- Log Activity --------------------
+  const logActivity = async (action: string, target: string, details?: string) => {
+    if (!currentUser) return;
+    await addDoc(collection(db, 'activityLogs'), {
+      userId: currentUser.uid,
+      userName: currentUser.displayName || currentUser.email,
+      trainerId: currentUser.uid,
+      action,
+      target,
+      details: details || '',
+      timestamp: serverTimestamp(),
+    });
+  };
+
   // -------------------- Fetch Courses --------------------
   useEffect(() => {
     if (!currentUser) return;
 
     const fetchCourses = async () => {
       try {
-        const q = query(
-          collection(db, 'courses'),
-          where('instructorId', '==', currentUser.uid)
-        );
+        const q = query(collection(db, 'courses'), where('instructorId', '==', currentUser.uid));
         const snapshot = await getDocs(q);
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Course[];
         setCourses(data);
@@ -96,9 +108,7 @@ export const TrainingMaterials: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const materialsRef = collection(db, 'trainingMaterials');
-    const q = query(materialsRef, where('trainerId', '==', currentUser.uid));
-
+    const q = query(collection(db, 'trainingMaterials'), where('trainerId', '==', currentUser.uid));
     const unsubscribe = onSnapshot(
       q,
       snapshot => {
@@ -173,7 +183,7 @@ export const TrainingMaterials: React.FC = () => {
     reader.onload = async () => {
       const base64Content = reader.result as string;
       try {
-        await addDoc(collection(db, 'trainingMaterials'), {
+        const docRef = await addDoc(collection(db, 'trainingMaterials'), {
           name: file.name,
           size: file.size,
           type: file.type,
@@ -187,6 +197,7 @@ export const TrainingMaterials: React.FC = () => {
         });
         setUploadQueue(prev => prev.filter(f => f.file.name !== file.name));
         showToast(`"${file.name}" uploaded successfully!`);
+        await logActivity('Uploaded material', file.name, `Course: ${course.title}`);
       } catch (error) {
         console.error('Upload error:', error);
         showToast(`Error uploading "${file.name}"`, 'error');
@@ -215,11 +226,12 @@ export const TrainingMaterials: React.FC = () => {
   };
 
   // -------------------- Delete --------------------
-  const handleDelete = async (materialId: string) => {
+  const handleDelete = async (material: Material) => {
     if (!confirm('Are you sure you want to delete this file?')) return;
     try {
-      await deleteDoc(doc(db, 'trainingMaterials', materialId));
+      await deleteDoc(doc(db, 'trainingMaterials', material.id));
       showToast('File deleted successfully!');
+      await logActivity('Deleted material', material.name, `Course: ${material.courseName}`);
     } catch (error) {
       console.error('Error deleting file:', error);
       showToast('Error deleting file', 'error');
@@ -344,7 +356,7 @@ export const TrainingMaterials: React.FC = () => {
                 <div className="relative">{getFileIcon(item.file.type)}
                   {isUploading && (
                     <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-900 dark:text-gray-100">
-                      {Math.round(uploadProgress[item.file.name])}%
+                      {Math.round(uploadProgress[item.file.name] || 0)}%
                     </div>
                   )}
                 </div>
@@ -401,7 +413,7 @@ export const TrainingMaterials: React.FC = () => {
                 <Download className="w-5 h-5" />
               </a>
               <button
-                onClick={() => handleDelete(mat.id)}
+                onClick={() => handleDelete(mat)}
                 className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition"
               >
                 <Trash2 className="w-5 h-5" />

@@ -7,10 +7,9 @@ import {
   Video as VideoIcon,
   File,
   X,
-  Play,
 } from "lucide-react";
 import { db } from "../../../lib/firebase";
-import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, doc, setDoc } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 
 interface Resource {
@@ -30,7 +29,28 @@ export const Resources: React.FC = () => {
   const [resources, setResources] = useState<Resource[]>([]);
   const [modalResource, setModalResource] = useState<Resource | null>(null);
   const [loading, setLoading] = useState(true);
-  const [previewOpen, setPreviewOpen] = useState<string | null>(null); // resource id for inline preview
+  const [previewOpen, setPreviewOpen] = useState<string | null>(null);
+
+  if (!currentUser) return <p>Loading user data...</p>;
+
+  // Helper to log activity
+  const logActivity = async (action: string, resource: Resource) => {
+    try {
+      const activityRef = doc(db, "activityLogs", `${currentUser.uid}_${Date.now()}`);
+      await setDoc(activityRef, {
+        userId: currentUser.uid,
+        userName: currentUser.displayName || "User",
+        action,
+        target: resource.name,
+        courseId: resource.courseId || null,
+        courseName: resource.courseName || null,
+        resourceId: resource.id,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      console.error("Failed to log activity:", err);
+    }
+  };
 
   // Fetch enrolled course resources
   useEffect(() => {
@@ -54,7 +74,7 @@ export const Resources: React.FC = () => {
         const enrolledCourseIds =
           enrollmentSnapshot.docs[0].data().courses?.map((c: any) => c.courseId) || [];
 
-        if (enrolledCourseIds.length === 0) {
+        if (!enrolledCourseIds.length) {
           setResources([]);
           setLoading(false);
           return;
@@ -84,11 +104,8 @@ export const Resources: React.FC = () => {
                   trainerName: data.trainerName,
                 };
 
-                if (change.type === "added" || change.type === "modified") {
-                  map.set(change.doc.id, resource);
-                } else if (change.type === "removed") {
-                  map.delete(change.doc.id);
-                }
+                if (change.type === "added" || change.type === "modified") map.set(change.doc.id, resource);
+                if (change.type === "removed") map.delete(change.doc.id);
               });
               return Array.from(map.values());
             });
@@ -117,11 +134,12 @@ export const Resources: React.FC = () => {
     return <File className={`${base} text-blue-500`} />;
   };
 
-  const handleOpen = (res: Resource) => {
+  const handleOpen = async (res: Resource) => {
     setModalResource(res);
+    await logActivity("Viewed Resource in Modal", res);
   };
 
-  const handleDownload = (res: Resource, e: React.MouseEvent) => {
+  const handleDownload = async (res: Resource, e: React.MouseEvent) => {
     e.stopPropagation();
     const link = document.createElement("a");
     link.href = res.content;
@@ -129,10 +147,13 @@ export const Resources: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    await logActivity("Downloaded Resource", res);
   };
 
-  const togglePreview = (id: string) => {
-    setPreviewOpen((prev) => (prev === id ? null : id));
+  const togglePreview = async (res: Resource) => {
+    setPreviewOpen((prev) => (prev === res.id ? null : res.id));
+    await logActivity("Previewed Resource Inline", res);
   };
 
   if (loading) {
@@ -140,37 +161,26 @@ export const Resources: React.FC = () => {
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Learning Resources</h1>
         <p className="text-gray-600 dark:text-gray-400 mt-1">Loading your course materials...</p>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="bg-gray-200 dark:bg-gray-700 rounded-lg h-32"></div>
-            </div>
-          ))}
-        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Learning Resources & E-Learning
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Access course materials, videos, and documents from your enrolled courses
-        </p>
-      </div>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+        Learning Resources & E-Learning
+      </h1>
+      <p className="text-gray-600 dark:text-gray-400 mt-1">
+        Access course materials, videos, and documents from your enrolled courses
+      </p>
 
       {resources.length === 0 ? (
         <Card className="w-full">
-          <CardContent>
-            <div className="text-center py-12">
-              <Download className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">
-                No materials available for your enrolled courses yet...
-              </p>
-            </div>
+          <CardContent className="text-center py-12">
+            <Download className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">
+              No materials available for your enrolled courses yet...
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -183,57 +193,31 @@ export const Resources: React.FC = () => {
               <CardContent className="flex flex-col gap-3 p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex items-start gap-3 flex-1">
-                    <div onClick={(e) => { e.stopPropagation(); togglePreview(res.id); }}>
-                      {getIcon(res.type)}
-                    </div>
+                    <div onClick={() => togglePreview(res)}>{getIcon(res.type)}</div>
                     <div className="flex flex-col gap-1 flex-1" onClick={() => handleOpen(res)}>
                       <span className="font-medium text-gray-900 dark:text-white">{res.name}</span>
-                      {res.courseName && (
-                        <span className="text-sm text-blue-600 dark:text-blue-400 font-medium">
-                          {res.courseName}
-                        </span>
-                      )}
-                      {res.trainerName && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          By: {res.trainerName}
-                        </span>
-                      )}
-                      {res.description && (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          {res.description}
-                        </span>
-                      )}
+                      {res.courseName && <span className="text-sm text-blue-600 dark:text-blue-400">{res.courseName}</span>}
+                      {res.trainerName && <span className="text-xs text-gray-500 dark:text-gray-400">By: {res.trainerName}</span>}
+                      {res.description && <span className="text-sm text-gray-500 dark:text-gray-400">{res.description}</span>}
                     </div>
                   </div>
-
                   <button
                     onClick={(e) => handleDownload(res, e)}
-                    className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200
-                               dark:bg-blue-700 dark:hover:bg-blue-600
-                               text-blue-700 dark:text-blue-200
-                               px-3 py-1 rounded-md shadow-sm transition"
+                    className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-700 dark:hover:bg-blue-600 text-blue-700 dark:text-blue-200 px-3 py-1 rounded-md shadow-sm transition"
                   >
                     <Download className="w-5 h-5" />
                   </button>
                 </div>
 
-                {/* Inline preview */}
-                {previewOpen === res.id && res.type.includes("image") && (
-                  <img src={res.content} alt={res.name} className="w-full h-40 object-contain rounded-md mt-2" />
-                )}
-                {previewOpen === res.id && res.type.includes("video") && (
-                  <video src={res.content} controls className="w-full h-40 rounded-md mt-2" />
-                )}
-                {previewOpen === res.id && res.type.includes("pdf") && (
-                  <iframe src={res.content} className="w-full h-60 rounded-md mt-2" title={res.name} />
-                )}
+                {previewOpen === res.id && res.type.includes("image") && <img src={res.content} alt={res.name} className="w-full h-40 object-contain rounded-md mt-2" />}
+                {previewOpen === res.id && res.type.includes("video") && <video src={res.content} controls className="w-full h-40 rounded-md mt-2" />}
+                {previewOpen === res.id && res.type.includes("pdf") && <iframe src={res.content} className="w-full h-60 rounded-md mt-2" title={res.name} />}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {/* Modal for full preview */}
       {modalResource && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl relative p-6 max-h-[90vh] overflow-y-auto">
@@ -244,31 +228,13 @@ export const Resources: React.FC = () => {
               <X className="w-6 h-6" />
             </button>
 
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                {modalResource.name}
-              </h2>
-              {modalResource.courseName && (
-                <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
-                  {modalResource.courseName}
-                </p>
-              )}
-              {modalResource.description && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {modalResource.description}
-                </p>
-              )}
-            </div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{modalResource.name}</h2>
+            {modalResource.courseName && <p className="text-sm text-blue-600 dark:text-blue-400">{modalResource.courseName}</p>}
+            {modalResource.description && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{modalResource.description}</p>}
 
-            {modalResource.type.includes("pdf") && (
-              <iframe src={modalResource.content} className="w-full h-[600px] rounded-md" title={modalResource.name} />
-            )}
-            {modalResource.type.includes("image") && (
-              <img src={modalResource.content} alt={modalResource.name} className="w-full max-h-[600px] object-contain rounded-md" />
-            )}
-            {modalResource.type.includes("video") && (
-              <video src={modalResource.content} controls autoPlay className="w-full max-h-[600px] rounded-md" />
-            )}
+            {modalResource.type.includes("pdf") && <iframe src={modalResource.content} className="w-full h-[600px] rounded-md" title={modalResource.name} />}
+            {modalResource.type.includes("image") && <img src={modalResource.content} alt={modalResource.name} className="w-full max-h-[600px] object-contain rounded-md" />}
+            {modalResource.type.includes("video") && <video src={modalResource.content} controls autoPlay className="w-full max-h-[600px] rounded-md" />}
           </div>
         </div>
       )}

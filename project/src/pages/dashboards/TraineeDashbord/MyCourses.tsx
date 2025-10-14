@@ -4,6 +4,8 @@ import { BookOpen, Search } from "lucide-react";
 import { CourseCard } from "../../../components/courses/CourseCard";
 import { User, Course } from "../../../types";
 import { useCourses } from "../../../hooks/useCourses";
+import { db } from "../../../lib/firebase";
+import { collection, doc, setDoc } from "firebase/firestore";
 
 interface MyCoursesProps {
   currentUser?: User | null;
@@ -79,17 +81,30 @@ export const MyCourses: React.FC<MyCoursesProps> = ({ currentUser }) => {
     }, {} as Record<string, Course[]>);
   }, [availableCourses]);
 
+  // Toast helper
   const showFeedback = (message: string) => {
     setSuccessMessage(message);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
+  // Firestore activity logging
+  const logActivity = async (action: string, courseName: string) => {
+    const activityRef = doc(db, "activityLogs", `${currentUser.uid}_${Date.now()}`);
+    await setDoc(activityRef, {
+      userId: currentUser.uid,
+      userName: currentUser.displayName || "User",
+      action,
+      target: courseName,
+      timestamp: new Date(),
+    });
+  };
+
   const handleEnroll = async (course: Course) => {
     if (course.status !== "active") return;
-
     try {
       await enrollCourse(course.id);
+      await logActivity("Enrolled in Course", course.title || "Unknown Course");
       showFeedback(`Successfully enrolled in "${course.title}"!`);
     } catch (error: any) {
       showFeedback(error?.message || "Enrollment failed.");
@@ -99,6 +114,7 @@ export const MyCourses: React.FC<MyCoursesProps> = ({ currentUser }) => {
   const handleUnenroll = async (course: Course) => {
     try {
       await unenrollCourse(course.id);
+      await logActivity("Unenrolled from Course", course.title || "Unknown Course");
       showFeedback(`You have unenrolled from "${course.title}"`);
     } catch (error: any) {
       showFeedback(error?.message || "Unenroll failed.");

@@ -10,6 +10,11 @@ import { Course } from "../../../types";
 import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 
+// Extend ActivityLog to include trainerId
+export interface ActivityLogExtended extends ActivityLog {
+  trainerId?: string;
+}
+
 export const TrainerOverview: React.FC = () => {
   const { currentUser } = useAuth();
   const { allCourses, loading } = useCourses(currentUser);
@@ -23,7 +28,7 @@ export const TrainerOverview: React.FC = () => {
   });
 
   const [uniqueStudents, setUniqueStudents] = useState<Set<string>>(new Set());
-  const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([]);
+  const [recentActivities, setRecentActivities] = useState<ActivityLogExtended[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
 
   useEffect(() => {
@@ -44,12 +49,12 @@ export const TrainerOverview: React.FC = () => {
       ? +((completedCourses / trainerCourses.length) * 100).toFixed(1)
       : 0;
 
-    setStats((prev) => ({
-      ...prev,
+    setStats({
       courses: trainerCourses.length,
       activeSessions,
       completionRate,
-    }));
+      totalStudents: 0, // will update after fetching enrollments
+    });
 
     // Fetch enrollments for trainer's courses
     if (trainerCourses.length === 0) return;
@@ -79,18 +84,21 @@ export const TrainerOverview: React.FC = () => {
     return () => unsubscribe();
   }, [allCourses, currentUser]);
 
+  // Fetch recent activities (trainer + trainees assigned to this trainer)
   useEffect(() => {
     if (!currentUser?.uid) return;
 
+    const activityCol = collection(db, "activityLogs");
+
     const q = query(
-      collection(db, "activityLogs"),
+      activityCol,
       where("trainerId", "==", currentUser.uid),
       orderBy("timestamp", "desc"),
       limit(5)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const activities: ActivityLog[] = snapshot.docs.map((doc) => {
+      const activities: ActivityLogExtended[] = snapshot.docs.map((doc) => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -99,8 +107,10 @@ export const TrainerOverview: React.FC = () => {
           target: data.target || "",
           details: data.details || "",
           timestamp: data.timestamp?.toDate() || new Date(),
+          trainerId: data.trainerId || undefined,
         };
       });
+
       setRecentActivities(activities);
       setLoadingActivities(false);
     });
@@ -166,8 +176,9 @@ export const TrainerOverview: React.FC = () => {
           </Card>
         </div>
 
+        {/* Recent Activity */}
         <div>
-          <RecentActivity logs={recentActivities} loading={loadingActivities} limitCount={5} />
+          <RecentActivity logs={recentActivities} loading={loadingActivities} limitCount={3} />
         </div>
       </div>
     </div>

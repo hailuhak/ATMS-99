@@ -107,54 +107,69 @@ export const TrainerGrades: React.FC = () => {
     }
   };
 
-  // ✅ Save grades
-  const handleSave = async (trainee: Enrollment) => {
-    if (!currentUser) return;
+// ✅ Save grades
+const handleSave = async (trainee: Enrollment) => {
+  if (!currentUser) return;
 
-    const trainerDoc = await getDoc(doc(db, "users", currentUser.uid));
-    const trainerName = trainerDoc.exists()
-      ? (trainerDoc.data() as User).displayName || "Trainer"
-      : "Trainer";
+  const trainerDoc = await getDoc(doc(db, "users", currentUser.uid));
+  const trainerName = trainerDoc.exists()
+    ? (trainerDoc.data() as User).displayName || "Trainer"
+    : "Trainer";
 
-    for (const course of trainee.courses) {
-      const key = `${trainee.userId}_${course.courseId}`;
-      const gradeValue = grades[key];
-      if (gradeValue == null) continue;
+  for (const course of trainee.courses) {
+    const key = `${trainee.userId}_${course.courseId}`;
+    const gradeValue = grades[key];
+    if (gradeValue == null) continue;
 
-      const q = query(
-        collection(db, "grades"),
-        where("trainerId", "==", currentUser.uid),
-        where("traineeId", "==", trainee.userId),
-        where("courseId", "==", course.courseId)
-      );
+    const q = query(
+      collection(db, "grades"),
+      where("trainerId", "==", currentUser.uid),
+      where("traineeId", "==", trainee.userId),
+      where("courseId", "==", course.courseId)
+    );
 
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const docRef = snapshot.docs[0].ref;
-        await updateDoc(docRef, { grade: gradeValue, updatedAt: Timestamp.now() });
-      } else {
-        await addDoc(collection(db, "grades"), {
-          traineeId: trainee.userId,
-          traineeName: userNames[trainee.userId] || "Unknown",
-          courseId: course.courseId,
-          courseTitle: course.title,
-          trainerId: currentUser.uid,
-          grade: gradeValue,
-          createdAt: Timestamp.now(),
-        });
-      }
-
-      // ✅ Send notification to admin
-      await notifyAdminOnGradeChange(
-        trainerName,
-        userNames[trainee.userId] || "Unknown",
-        course.title,
-        gradeValue
-      );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const docRef = snapshot.docs[0].ref;
+      await updateDoc(docRef, { grade: gradeValue, updatedAt: Timestamp.now() });
+    } else {
+      await addDoc(collection(db, "grades"), {
+        traineeId: trainee.userId,
+        traineeName: userNames[trainee.userId] || "Unknown",
+        courseId: course.courseId,
+        courseTitle: course.title,
+        trainerId: currentUser.uid,
+        grade: gradeValue,
+        createdAt: Timestamp.now(),
+      });
     }
 
-    alert(`✅ Grades saved for ${userNames[trainee.userId] || "Unknown"}`);
-  };
+    // ✅ Send notification to admin
+    await notifyAdminOnGradeChange(
+      trainerName,
+      userNames[trainee.userId] || "Unknown",
+      course.title,
+      gradeValue
+    );
+
+    // ✅ Add activity log for trainer (this is new)
+    try {
+      await addDoc(collection(db, "activityLogs"), {
+        userName: trainerName,
+        trainerId: currentUser.uid,
+        action: "Updated Grade",
+        target: userNames[trainee.userId] || "Unknown",
+        details: `Set grade to ${gradeValue}% for ${course.title}`,
+        timestamp: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("Error adding activity log:", err);
+    }
+  }
+
+  alert(`✅ Grades saved for ${userNames[trainee.userId] || "Unknown"}`);
+};
+
 
   // ✅ UI
   return (

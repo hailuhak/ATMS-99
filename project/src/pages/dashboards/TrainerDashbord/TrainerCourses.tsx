@@ -17,6 +17,37 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
+// Helper for logging activity
+const logActivity = async ({
+  userId,
+  userName,
+  trainerId,
+  action,
+  target,
+  details,
+}: {
+  userId: string;
+  userName: string;
+  trainerId?: string;
+  action: string;
+  target: string;
+  details?: string;
+}) => {
+  try {
+    await addDoc(collection(db, 'activityLogs'), {
+      userId,
+      userName,
+      trainerId: trainerId || userId,
+      action,
+      target,
+      details: details || '',
+      timestamp: serverTimestamp(),
+    });
+  } catch (err) {
+    console.error('Error logging activity:', err);
+  }
+};
+
 interface FormData {
   title: string;
   category: string;
@@ -113,6 +144,8 @@ export const TrainerCourses: React.FC = () => {
 
   // Save new or edited course
   const saveCourse = async () => {
+    if (!currentUser) return;
+
     const newErrors: Partial<FormData> = {};
     Object.keys(formData).forEach(key => {
       const error = validateField(key, (formData as any)[key]);
@@ -122,7 +155,6 @@ export const TrainerCourses: React.FC = () => {
       setErrors(newErrors);
       return;
     }
-    if (!currentUser) return;
 
     try {
       if (editingCourseId) {
@@ -136,9 +168,20 @@ export const TrainerCourses: React.FC = () => {
           hours: Number(formData.hours),
           updatedAt: serverTimestamp(),
         });
+
+        // Log edit activity
+        await logActivity({
+          userId: currentUser.uid,
+          userName: currentUser.displayName || 'Trainer',
+          trainerId: currentUser.uid,
+          action: 'Updated Course',
+          target: formData.title,
+          details: `Updated course details`,
+        });
+
         setEditingCourseId(null);
       } else {
-        await addDoc(collection(db, 'courses'), {
+        const newCourseRef = await addDoc(collection(db, 'courses'), {
           title: formData.title,
           category: formData.category,
           level: formData.level,
@@ -150,6 +193,16 @@ export const TrainerCourses: React.FC = () => {
           instructorName: currentUser.displayName,
           createdAt: serverTimestamp(),
           students: [],
+        });
+
+        // Log add activity
+        await logActivity({
+          userId: currentUser.uid,
+          userName: currentUser.displayName || 'Trainer',
+          trainerId: currentUser.uid,
+          action: 'Added Course',
+          target: formData.title,
+          details: `Course created with ID: ${newCourseRef.id}`,
         });
       }
 
@@ -171,10 +224,23 @@ export const TrainerCourses: React.FC = () => {
   };
 
   // Delete a course
-  const handleDeleteCourse = async (courseId: string) => {
+  const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
     if (!window.confirm('Are you sure you want to delete this course?')) return;
+    if (!currentUser) return;
+
     try {
       await deleteDoc(doc(db, 'courses', courseId));
+
+      // Log delete activity
+      await logActivity({
+        userId: currentUser.uid,
+        userName: currentUser.displayName || 'Trainer',
+        trainerId: currentUser.uid,
+        action: 'Deleted Course',
+        target: courseTitle,
+        details: `Deleted course with ID: ${courseId}`,
+      });
+
       fetchCourses();
     } catch (err) {
       console.error('Error deleting course:', err);
@@ -267,9 +333,6 @@ export const TrainerCourses: React.FC = () => {
                 className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               >
                 <option value="active">Active</option>
-                {/* <option value="draft">Draft</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option> */}
               </select>
             </div>
           </div>
@@ -341,8 +404,7 @@ export const TrainerCourses: React.FC = () => {
             <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-6" />
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No courses assigned yet</h3>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
-              You will see courses here once the admin assigns them to you.
-            </p>
+              You will see courses here once the admin assigns them to you.            </p>
           </div>
         ) : (
           courses.map(course => (
@@ -351,7 +413,7 @@ export const TrainerCourses: React.FC = () => {
               course={course}
               showActions={true}
               onEdit={() => handleEditCourse(course)}
-              onDelete={() => handleDeleteCourse(course.id)}
+              onDelete={() => handleDeleteCourse(course.id, course.title)}
             />
           ))
         )}
@@ -359,3 +421,5 @@ export const TrainerCourses: React.FC = () => {
     </div>
   );
 };
+
+           

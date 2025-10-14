@@ -40,7 +40,11 @@ interface CourseCardProps {
   onView?: () => void;
   showActions?: boolean;
   className?: string;
+  onUnenroll?: () => Promise<void>;      // <-- add this
+  onLessonComplete?: (lessonName: string) => Promise<void>; // <-- add this
+  onCourseComplete?: () => Promise<void>; // <-- add this
 }
+
 
 export const CourseCard: React.FC<CourseCardProps> = ({
   course,
