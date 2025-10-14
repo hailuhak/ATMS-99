@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Users, Calendar, BarChart as BarChart3, FileText, UserCheck, GraduationCap, Monitor, Menu, X ,House} from 'lucide-react';
+import {
+  BookOpen,
+  Users,
+  Calendar,
+  BarChart as BarChart3,
+  FileText,
+  UserCheck,
+  GraduationCap,
+  Monitor,
+  Menu,
+  X,
+  House,
+} from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { clsx } from 'clsx';
 
@@ -16,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
   const [navbarHeight, setNavbarHeight] = useState(64); // default navbar height
   const navbarRef = useRef<HTMLDivElement>(null);
 
+  // Update on resize
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 1024);
     window.addEventListener('resize', handleResize);
@@ -31,24 +44,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
     { id: 'dashboard', label: 'Home', icon: House },
     { id: 'users', label: 'User Management', icon: Users, roles: ['admin'] },
     { id: 'pending-users', label: 'Pending Users', icon: UserCheck, roles: ['admin'] },
-    { id: 'courses', label: 'Course Management', icon: BookOpen, roles: ['admin'] },
     { id: 'sessions', label: 'Sessions', icon: Calendar, roles: ['admin'] },
+    { id: 'courses', label: 'Course Management', icon: BookOpen, roles: ['admin'] },
     { id: 'grades', label: 'Grades', icon: BarChart3, roles: ['admin'] },
     { id: 'activities', label: 'Activity Logs', icon: FileText, roles: ['admin'] },
 
-    { id: 'courses', label: 'My Courses', icon: BookOpen, roles: ['trainer'] },
-    { id: 'sessions', label: 'Training Sessions', icon: Calendar, roles: ['trainer'] },
+    { id: 'courses-trainer', label: 'My Courses', icon: BookOpen, roles: ['trainer'] },
+    { id: 'sessions-trainer', label: 'Training Sessions', icon: Calendar, roles: ['trainer'] },
     { id: 'attendance', label: 'Attendance', icon: UserCheck, roles: ['trainer'] },
     { id: 'materials', label: 'Materials', icon: FileText, roles: ['trainer'] },
-    { id: 'grades', label: 'Trainee Grades', icon: BarChart3, roles: ['trainer'] },
+    { id: 'grades-trainer', label: 'Trainee Grades', icon: BarChart3, roles: ['trainer'] },
 
-    { id: 'courses', label: 'My Courses', icon: GraduationCap, roles: ['trainee'] },
+    { id: 'courses-trainee', label: 'My Courses', icon: GraduationCap, roles: ['trainee'] },
     { id: 'progress', label: 'Progress', icon: BarChart3, roles: ['trainee'] },
     { id: 'schedule', label: 'Schedule', icon: Calendar, roles: ['trainee'] },
     { id: 'resources', label: 'Resources', icon: FileText, roles: ['trainee'] },
-    { id: 'grades', label: 'My Grades', icon: Monitor, roles: ['trainee'] },
+    { id: 'grades-trainee', label: 'My Grades', icon: Monitor, roles: ['trainee'] },
 
-    { id: 'courses', label: 'Browse Courses', icon: BookOpen, roles: ['pending'] },
+    { id: 'courses-pending', label: 'Browse Courses', icon: BookOpen, roles: ['pending'] },
     { id: 'profile', label: 'Profile', icon: Users, roles: ['pending'] },
   ];
 
@@ -109,15 +122,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
       <main
         className={clsx(
           'flex-1 min-h-screen p-6 bg-gray-50 dark:bg-gray-900 transition-all',
-          !isMobile && 'ml-40' // reduced margin for smaller sidebar
+          !isMobile && 'ml-40'
         )}
       >
         {/* Scrollable content */}
       </main>
 
-      {/* Mobile menu toggle button */}
+      {/* Mobile Hamburger Button */}
       {isMobile && (
-        <div className="fixed top-4 left-4 z-30">
+        <div
+          className="fixed left-4 z-40" // higher than sidebar (z-20) and overlay (z-10)
+          style={{ top: navbarHeight + 8 }} // 8px gap below navbar
+        >
           <button
             onClick={() => setIsOpen(true)}
             className="text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 p-2 rounded shadow"

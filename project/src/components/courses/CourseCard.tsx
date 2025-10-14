@@ -1,11 +1,11 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Clock, Calendar, BookOpen, CreditCard as Edit2, Trash2 } from "lucide-react";
+import { Clock, Calendar, BookOpen, Edit2, Trash2 } from "lucide-react";
 import { Course } from "../../types";
 import { Card, CardContent, CardFooter, CardHeader } from "../ui/Card";
 import { Button } from "../ui/Button";
 
-// Colors for levels and status
+// ==== Color Configurations ====
 const levelColors: Record<string, string> = {
   beginner: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   intermediate: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
@@ -21,17 +21,44 @@ const statusColors: Record<string, string> = {
   default: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
 };
 
-// Utility to format date
-export const formatDate = (value: any) => {
+// ==== Utility Function to Format Date ====
+export const formatDate = (value: any): string => {
   if (!value) return "N/A";
-  if (value instanceof Date) return value.toLocaleDateString();
+
   try {
-    return new Date(value).toLocaleDateString();
+    // Handle Firestore Timestamp
+    if (value?.seconds) {
+      return new Date(value.seconds * 1000).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+
+    // Handle JS Date object
+    if (value instanceof Date) {
+      return value.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+
+    // Handle string or numeric date
+    const parsedDate = new Date(value);
+    return isNaN(parsedDate.getTime())
+      ? "Invalid Date"
+      : parsedDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
   } catch {
-    return "Invalid date";
+    return "Invalid Date";
   }
 };
 
+// ==== Props ====
 interface CourseCardProps {
   course: Course;
   onEnroll?: () => void;
@@ -40,12 +67,12 @@ interface CourseCardProps {
   onView?: () => void;
   showActions?: boolean;
   className?: string;
-  onUnenroll?: () => Promise<void>;      // <-- add this
-  onLessonComplete?: (lessonName: string) => Promise<void>; // <-- add this
-  onCourseComplete?: () => Promise<void>; // <-- add this
+  onUnenroll?: () => Promise<void>;
+  onLessonComplete?: (lessonName: string) => Promise<void>;
+  onCourseComplete?: () => Promise<void>;
 }
 
-
+// ==== Main Component ====
 export const CourseCard: React.FC<CourseCardProps> = ({
   course,
   onEnroll,
@@ -64,26 +91,36 @@ export const CourseCard: React.FC<CourseCardProps> = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Card className={`relative hover:shadow-lg transition-shadow duration-300 rounded-xl flex flex-col justify-between h-full min-h-[280px] ${className}`}>
+      <Card
+        className={`relative hover:shadow-lg transition-shadow duration-300 rounded-xl flex flex-col justify-between h-full min-h-[280px] ${className}`}
+      >
+        {/* ===== Header ===== */}
         <CardHeader className="pb-0">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
             <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white line-clamp-2">
               {course.title || "Untitled Course"}
             </h3>
+
             <div className="flex gap-2 flex-wrap">
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${levelColor}`}>
-                {course.level ? course.level.charAt(0).toUpperCase() + course.level.slice(1) : "N/A"}
+                {course.level
+                  ? course.level.charAt(0).toUpperCase() + course.level.slice(1)
+                  : "N/A"}
               </span>
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}>
-                {course.status ? course.status.charAt(0).toUpperCase() + course.status.slice(1) : "N/A"}
+                {course.status
+                  ? course.status.charAt(0).toUpperCase() + course.status.slice(1)
+                  : "N/A"}
               </span>
             </div>
           </div>
+
           <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
             Trainer: {course.instructorName || "Unknown Instructor"}
           </p>
         </CardHeader>
 
+        {/* ===== Content ===== */}
         <CardContent className="flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm sm:text-base text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-2">
@@ -105,6 +142,7 @@ export const CourseCard: React.FC<CourseCardProps> = ({
           </div>
         </CardContent>
 
+        {/* ===== Footer (Actions) ===== */}
         {showActions && (
           <CardFooter className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-between mt-4">
             <div className="flex flex-1 gap-2 flex-wrap">
@@ -117,7 +155,9 @@ export const CourseCard: React.FC<CourseCardProps> = ({
 
             {onEnroll && course.status === "active" && (
               <div className="mt-2 sm:mt-0">
-                <Button size="sm" onClick={onEnroll}>Enroll Now</Button>
+                <Button size="sm" onClick={onEnroll}>
+                  Enroll Now
+                </Button>
               </div>
             )}
 
