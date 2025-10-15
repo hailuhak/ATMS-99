@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   House,
+  CheckSquare
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { clsx } from 'clsx';
@@ -49,20 +50,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
     { id: 'grades', label: 'Grades', icon: BarChart3, roles: ['admin'] },
     { id: 'activities', label: 'Activity Logs', icon: FileText, roles: ['admin'] },
 
-    { id: 'courses-trainer', label: 'My Courses', icon: BookOpen, roles: ['trainer'] },
-    { id: 'sessions-trainer', label: 'Training Sessions', icon: Calendar, roles: ['trainer'] },
-    { id: 'attendance', label: 'Attendance', icon: UserCheck, roles: ['trainer'] },
+    { id: 'courses', label: 'My Courses', icon: BookOpen, roles: ['trainer'] },
+    { id: 'sessions', label: 'Training Sessions', icon: Calendar, roles: ['trainer'] },
     { id: 'materials', label: 'Materials', icon: FileText, roles: ['trainer'] },
     { id: 'grades-trainer', label: 'Trainee Grades', icon: BarChart3, roles: ['trainer'] },
+    {id:'feedback', label: 'Feedback', icon: CheckSquare, roles: ['trainer']},
 
-    { id: 'courses-trainee', label: 'My Courses', icon: GraduationCap, roles: ['trainee'] },
-    { id: 'progress', label: 'Progress', icon: BarChart3, roles: ['trainee'] },
+    { id: 'courses', label: 'My Courses', icon: GraduationCap, roles: ['trainee'] },
     { id: 'schedule', label: 'Schedule', icon: Calendar, roles: ['trainee'] },
     { id: 'resources', label: 'Resources', icon: FileText, roles: ['trainee'] },
-    { id: 'grades-trainee', label: 'My Grades', icon: Monitor, roles: ['trainee'] },
-
+  {id:'grades-trainee', label: 'Grades', icon: BarChart3, roles: ['trainee']},
     { id: 'courses-pending', label: 'Browse Courses', icon: BookOpen, roles: ['pending'] },
     { id: 'profile', label: 'Profile', icon: Users, roles: ['pending'] },
+    { id: 'feedback', label: 'Send Feedback', icon: CheckSquare, roles: ['trainee'] },
   ];
 
   const role = currentUser?.role || 'pending';
