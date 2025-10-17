@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { db } from "../../../lib/firebase";
 import {
-  doc,
-  getDoc,
-  addDoc,
-  serverTimestamp,
   collection,
   query,
   where,
   onSnapshot,
   orderBy,
+  addDoc,
   deleteDoc,
+  doc,
+  getDocs,
+  serverTimestamp,
 } from "firebase/firestore";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -20,40 +20,80 @@ export const FeedbackForm: React.FC = () => {
   const { currentUser } = useAuth();
   const traineeId = currentUser?.uid;
 
+  const [trainerName, setTrainerName] = useState("");
   const [trainerId, setTrainerId] = useState<string | null>(null);
-  const [instructorName, setInstructorName] = useState<string>("Instructor");
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
+
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const inputWrapperRef = useRef<HTMLDivElement | null>(null);
 
-  // Scroll to bottom when feedbacks change
+  // Auto-scroll when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [feedbacks]);
 
-  // Fetch trainer info
+  // Auto-grow textarea
   useEffect(() => {
-    const fetchTrainerInfo = async () => {
-      if (!traineeId) return;
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [message]);
+
+  // Case-insensitive trainer search with suggestions
+  useEffect(() => {
+    const fetchTrainers = async () => {
+      if (!trainerName.trim()) {
+        setSuggestions([]);
+        setTrainerId(null);
+        return;
+      }
+
       try {
-        const enrolDoc = await getDoc(doc(db, "enrollments", traineeId));
-        if (enrolDoc.exists()) {
-          const data = enrolDoc.data();
-          const activeCourse = data.courses?.find(
-            (c: any) => c.status.toLowerCase() === "active"
+        const snapshot = await getDocs(collection(db, "users"));
+        const allTrainers = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((u: any) =>
+            u.displayName?.toLowerCase().includes(trainerName.toLowerCase())
           );
-          if (activeCourse) {
-            setTrainerId(activeCourse.instructorId);
-            setInstructorName(activeCourse.instructorName);
-          }
-        }
+
+        setSuggestions(allTrainers.slice(0, 5));
+
+        const exactMatch = allTrainers.find(
+          (u: any) =>
+            u.displayName?.toLowerCase() === trainerName.toLowerCase()
+        );
+        setTrainerId(exactMatch ? exactMatch.id : null);
       } catch (error) {
-        console.error("Error fetching trainer info:", error);
+        console.error("Error searching trainer:", error);
       }
     };
-    fetchTrainerInfo();
-  }, [traineeId]);
+
+    fetchTrainers();
+  }, [trainerName]);
+
+  // Hide suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        inputWrapperRef.current &&
+        !inputWrapperRef.current.contains(event.target as Node)
+      ) {
+        setSuggestions([]);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Fetch feedbacks in real-time
   useEffect(() => {
@@ -77,14 +117,6 @@ export const FeedbackForm: React.FC = () => {
     return () => unsubscribe();
   }, [traineeId, trainerId]);
 
-  // Auto-grow textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [message]);
-
   // Send feedback
   const handleSend = async () => {
     if (!message.trim() || !traineeId || !trainerId) return;
@@ -95,7 +127,7 @@ export const FeedbackForm: React.FC = () => {
         traineeId,
         message,
         timestamp: serverTimestamp(),
-        status: "sent",
+        sender: "trainee", // mark who sent it
       });
 
       setFeedbacks((prev) => [
@@ -106,7 +138,7 @@ export const FeedbackForm: React.FC = () => {
           traineeId,
           message,
           timestamp: new Date(),
-          status: "sent",
+          sender: "trainee",
         },
       ]);
 
@@ -117,7 +149,7 @@ export const FeedbackForm: React.FC = () => {
     }
   };
 
-  // Delete feedback
+  // Delete feedback (only trainee messages)
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, "feedbacks", id));
@@ -127,26 +159,64 @@ export const FeedbackForm: React.FC = () => {
     }
   };
 
-  return (
-    <div className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-lg shadow-md h-full w-full">
-      <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">
-        Feedback to {instructorName}
-      </h2>
+  const handleSelectTrainer = (trainer: any) => {
+    setTrainerName(trainer.displayName);
+    setTrainerId(trainer.id);
+    setSuggestions([]);
+  };
 
-      {/* Input Section */}
+  return (
+    <div className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-lg shadow-md h-full w-full relative">
+      {/* Header + Trainer Input */}
+      <div className="flex items-center mb-3 flex-wrap">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mr-2">
+          Send Feedback to:
+        </h2>
+
+        <div className="relative" ref={inputWrapperRef}>
+          <input
+            type="text"
+            value={trainerName}
+            onChange={(e) => setTrainerName(e.target.value)}
+            placeholder="Enter trainer name..."
+            className="w-48 p-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:text-gray-100"
+          />
+          {suggestions.length > 0 && (
+            <ul className="absolute z-10 bg-white dark:bg-gray-800 border rounded-md shadow-md mt-1 w-full max-h-40 overflow-y-auto">
+              {suggestions.map((trainer) => (
+                <li
+                  key={trainer.id}
+                  onClick={() => handleSelectTrainer(trainer)}
+                  className="px-2 py-1 hover:bg-blue-100 dark:hover:bg-gray-700 cursor-pointer text-sm"
+                >
+                  {trainer.displayName}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {!trainerId && trainerName.trim() && (
+          <span className="text-red-500 text-sm ml-2">Trainer not found.</span>
+        )}
+      </div>
+
+      {/* Message Input */}
       <div className="flex flex-col sm:flex-row gap-2 mb-4 w-full">
         <textarea
           ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Type your feedback..."
-          className="w-full sm:w-1/2 h-12 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:text-gray-100 resize-none overflow-hidden transition-colors duration-200"
+          className="w-full sm:w-1/2 h-10 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:text-gray-100 resize-none overflow-hidden"
         />
         <Button
           onClick={handleSend}
-          disabled={!message.trim()}
+          disabled={!message.trim() || !trainerId}
           className={`w-full sm:w-auto mt-2 sm:mt-0 ${
-            !message.trim() ? "opacity-50 cursor-not-allowed" : ""
+            !message.trim() || !trainerId
+              ? "opacity-50 cursor-not-allowed"
+              : ""
           }`}
         >
           Send
@@ -157,7 +227,7 @@ export const FeedbackForm: React.FC = () => {
       <div className="flex flex-col gap-2 overflow-y-auto h-64 pr-2">
         {feedbacks.length > 0 ? (
           feedbacks.map((fb) => {
-            const isTrainee = fb.traineeId === traineeId;
+            const isTrainee = fb.sender === "trainee";
             return (
               <div
                 key={fb.id}
@@ -165,18 +235,6 @@ export const FeedbackForm: React.FC = () => {
                   isTrainee ? "justify-start" : "justify-end"
                 }`}
               >
-                {/* Name */}
-                <div
-                  className={`font-semibold w-28 flex-shrink-0 ${
-                    isTrainee
-                      ? "text-blue-800 dark:text-white"
-                      : "text-green-700 dark:text-green-300"
-                  }`}
-                >
-                  {isTrainee ? currentUser?.displayName || "You" : instructorName}:
-                </div>
-
-                {/* Message Bubble */}
                 <div
                   className={`relative p-2 rounded-lg break-words flex-1 ${
                     isTrainee
@@ -185,8 +243,6 @@ export const FeedbackForm: React.FC = () => {
                   }`}
                 >
                   {fb.message}
-
-                  {/* Delete Button (only for trainee's messages) */}
                   {isTrainee && (
                     <button
                       onClick={() => handleDelete(fb.id)}
@@ -201,7 +257,9 @@ export const FeedbackForm: React.FC = () => {
             );
           })
         ) : (
-          <p className="text-gray-500 text-center w-full mt-2">No feedback yet.</p>
+          <p className="text-gray-500 text-center w-full mt-2">
+            No feedback yet.
+          </p>
         )}
         <div ref={messagesEndRef} />
       </div>
