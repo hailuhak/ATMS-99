@@ -7,6 +7,8 @@ import {
   onSnapshot,
   addDoc,
   serverTimestamp,
+  doc,
+  getDoc,
 } from "firebase/firestore";
 import { Button } from "../../../components/ui/Button";
 
@@ -26,11 +28,12 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
   const [messages, setMessages] = useState<FeedbackMessage[]>([]);
   const [reply, setReply] = useState("");
   const [selectedTrainee, setSelectedTrainee] = useState<string | null>(null);
+  const [traineeNames, setTraineeNames] = useState<Record<string, string>>({});
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Scroll chat to bottom when messages update
+  // Scroll chat to bottom when messages or selected trainee changes
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, selectedTrainee]);
@@ -50,6 +53,26 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
     });
     return () => unsubscribe();
   }, [trainerId]);
+
+  // Fetch trainee names based on IDs
+  useEffect(() => {
+    const fetchTraineeNames = async () => {
+      const ids = [...new Set(messages.map((m) => m.traineeId))];
+      const names: Record<string, string> = {};
+
+      for (let id of ids) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", id));
+          names[id] = userDoc.exists() ? userDoc.data().displayName || "Unknown" : "Unknown";
+        } catch {
+          names[id] = "Unknown";
+        }
+      }
+      setTraineeNames(names);
+    };
+
+    if (messages.length > 0) fetchTraineeNames();
+  }, [messages]);
 
   // Send reply to selected trainee
   const handleReply = async () => {
@@ -77,15 +100,15 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
   const trainees = [...new Set(messages.map((m) => m.traineeId))];
 
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
+    <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-xl shadow-md">
+      <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-gray-100">
         Trainee Feedback Messages
       </h2>
 
-      <div className="flex gap-4">
-        {/* Left panel: list of trainees */}
-        <div className="w-1/3 border rounded-lg p-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-          <h3 className="font-medium mb-2">Trainees</h3>
+      <div className="flex gap-6">
+        {/* Trainees list */}
+        <div className="w-1/3 flex flex-col gap-2">
+          <h3 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Trainees</h3>
           {trainees.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400">No messages yet.</p>
           ) : (
@@ -93,34 +116,33 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
               <div
                 key={id}
                 onClick={() => setSelectedTrainee(id)}
-                className={`p-2 cursor-pointer rounded ${
+                className={`p-3 rounded-lg cursor-pointer transition-colors duration-200 ${
                   selectedTrainee === id
                     ? "bg-blue-200 dark:bg-blue-700 font-semibold"
-                    : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                    : "hover:bg-gray-200 dark:hover:bg-gray-800"
                 }`}
               >
-                {id}
+                {traineeNames[id] || id}
               </div>
             ))
           )}
         </div>
 
-        {/* Right panel: chat area */}
-        <div className="w-2/3 border rounded-lg p-4 flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        {/* Chat area */}
+        <div className="w-2/3 flex flex-col gap-4 bg-white dark:bg-gray-800 rounded-xl p-4 shadow-inner">
           {selectedTrainee ? (
             <>
-              {/* Chat messages */}
-              <div className="flex-1 overflow-y-auto mb-3 space-y-2">
+              <div className="flex-1 overflow-y-auto space-y-3">
                 {messages
                   .filter((m) => m.traineeId === selectedTrainee)
                   .sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0))
                   .map((msg) => (
                     <div
                       key={msg.id}
-                      className={`p-2 rounded-lg max-w-xs break-words ${
+                      className={`px-4 py-2 rounded-2xl max-w-xl break-words ${
                         msg.sender === "trainer"
-                          ? "bg-blue-500 text-white ml-auto"
-                          : "bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          ? "bg-blue-500 text-white self-end"
+                          : "bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-100 self-start"
                       }`}
                     >
                       {msg.message}
@@ -130,21 +152,24 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
               </div>
 
               {/* Reply box */}
-              <div className="flex gap-2 flex-col md:flex-row">
+              <div className="flex flex-col items-center gap-3 mt-4">
                 <textarea
                   ref={textareaRef}
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
                   placeholder="Type your reply..."
-                  className="flex-1 resize-none h-24 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100"
+                  className="w-full resize-none min-h-[80px] max-h-44 p-3 rounded-xl border-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                 />
-                <Button onClick={handleReply} className="self-end md:self-auto">
+                <Button
+                  onClick={handleReply}
+                  className="px-6 py-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition"
+                >
                   Send
                 </Button>
               </div>
             </>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-gray-500 dark:text-gray-400 text-center mt-10">
               Select a trainee to view messages.
             </p>
           )}
