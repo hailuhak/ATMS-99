@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
-import { Users, Plus, Edit2, Trash2 } from "lucide-react";
+import { Users, Plus, Edit2, Trash2, Eye, EyeOff } from "lucide-react";
 import { db, auth } from "../../../lib/firebase";
 import {
   collection,
@@ -18,10 +18,7 @@ import {
   onSnapshot,
   where,
 } from "firebase/firestore";
-import {
-  createUserWithEmailAndPassword,
-  updateEmail,
-} from "firebase/auth";
+import { createUserWithEmailAndPassword, updateEmail } from "firebase/auth";
 
 interface User {
   id?: string;
@@ -37,6 +34,8 @@ export const UserManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
   const [newUser, setNewUser] = useState({
     displayName: "",
     email: "",
@@ -96,6 +95,7 @@ export const UserManagement: React.FC = () => {
     }
 
     try {
+      // Check for existing user
       const userRef = collection(db, "users");
       const q = query(userRef, where("email", "==", email));
       const snapshot = await getDocs(q);
@@ -105,6 +105,7 @@ export const UserManagement: React.FC = () => {
         return;
       }
 
+      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
@@ -120,6 +121,7 @@ export const UserManagement: React.FC = () => {
         createdAt: new Date(),
       };
 
+      // Save user to Firestore
       await setDoc(doc(db, "users", uid), {
         ...userData,
         lastLogin: new Date(),
@@ -239,14 +241,22 @@ export const UserManagement: React.FC = () => {
               value={newUser.email}
               onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
             />
-            <Input
-              placeholder="Password"
-              type="password"
-              value={newUser.password}
-              onChange={(e) =>
-                setNewUser({ ...newUser, password: e.target.value })
-              }
-            />
+            <div className="relative">
+              <Input
+                placeholder="Password"
+                type={showPassword ? "text" : "password"}
+                value={newUser.password}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, password: e.target.value })
+                }
+              />
+              <span
+                className="absolute right-3 top-3 cursor-pointer"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </span>
+            </div>
             <select
               value={newUser.role}
               onChange={(e) =>
@@ -356,7 +366,6 @@ export const UserManagement: React.FC = () => {
                           className="w-5 h-5 text-blue-500 cursor-pointer hover:text-blue-700"
                           onClick={() => setEditingUser(user)}
                         />
-                        {/* 🔹 Hide Delete Icon if user is Admin */}
                         {user.role !== "admin" && (
                           <Trash2
                             className="w-5 h-5 text-red-500 cursor-pointer hover:text-red-700"

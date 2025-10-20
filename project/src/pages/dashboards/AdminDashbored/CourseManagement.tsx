@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
-import { Plus, Edit2, Trash2, X } from "lucide-react";
+import { Plus, Edit2, Trash2 } from "lucide-react";
 import { Course, ActivityLog, Session } from "../../../types";
 import { useFirestoreQuery } from "../../../hooks/useFirestoreQuery";
 import { db } from "../../../lib/firebase";
@@ -23,8 +23,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 
-const normalize = (s?: string) =>
-  (s || "").toString().trim().toLowerCase();
+const normalize = (s?: string) => (s || "").toString().trim().toLowerCase();
 
 const defaultCourseData: Omit<Course, "id" | "createdAt" | "updatedAt"> = {
   title: "",
@@ -46,6 +45,7 @@ interface ModalProps {
   onClose: () => void;
   children: React.ReactNode;
 }
+
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
   if (!isOpen) return null;
   return (
@@ -65,7 +65,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
 };
 
 export const CourseManagement: React.FC = () => {
-  // Firestore query hook for initial courses page
   const { data: coursesFromDB, loading: coursesLoading } = useFirestoreQuery<Course>(
     "courses",
     [orderBy("createdAt", "desc"), limit(50)]
@@ -84,23 +83,22 @@ export const CourseManagement: React.FC = () => {
 
   /* -------------------------
      Sessions (real-time)
-     ------------------------- */
+  ------------------------- */
   useEffect(() => {
     const q = query(collection(db, "sessions"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
       const loaded = snap.docs.map((d) => {
         const data = d.data() as any;
-        // handle both Timestamp and Date shapes
-        const safe = (v: any) =>
+        const safeDate = (v: any) =>
           v && typeof v.toDate === "function" ? v.toDate() : v instanceof Date ? v : new Date(v);
         return {
           id: d.id,
           title: data.title,
-          regStart: safe(data.regStart),
-          regEnd: safe(data.regEnd),
-          trainStart: safe(data.trainStart),
-          trainEnd: safe(data.trainEnd),
-          createdAt: safe(data.createdAt),
+          regStart: safeDate(data.regStart),
+          regEnd: safeDate(data.regEnd),
+          trainStart: safeDate(data.trainStart),
+          trainEnd: safeDate(data.trainEnd),
+          createdAt: safeDate(data.createdAt),
         } as Session;
       });
       setSessions(loaded);
@@ -110,41 +108,28 @@ export const CourseManagement: React.FC = () => {
   }, []);
 
   /* -------------------------
-     Normalize courses from hook (timestamps -> Date)
-     ------------------------- */
+     Normalize courses
+  ------------------------- */
   useEffect(() => {
     if (!coursesFromDB) return;
     const formatted = coursesFromDB.map((course) => {
-      const createdAt = (course.createdAt as any)?.toDate
-        ? (course.createdAt as any).toDate()
-        : course.createdAt instanceof Date
-        ? course.createdAt
-        : new Date();
-      const updatedAt = (course.updatedAt as any)?.toDate
-        ? (course.updatedAt as any).toDate()
-        : course.updatedAt instanceof Date
-        ? course.updatedAt
-        : new Date();
-
       const safeDate = (d: any) =>
         d && typeof d.toDate === "function" ? d.toDate() : d instanceof Date ? d : new Date(d);
-
       return {
         ...course,
-        createdAt,
-        updatedAt,
         startDate: safeDate((course as any).startDate),
         endDate: safeDate((course as any).endDate),
+        createdAt: safeDate((course as any).createdAt),
+        updatedAt: safeDate((course as any).updatedAt),
         materials: course.materials || [],
       } as Course;
     });
-
     setCourses(formatted);
   }, [coursesFromDB]);
 
   /* -------------------------
      Filtered view
-     ------------------------- */
+  ------------------------- */
   const filteredCourses = useMemo(() => {
     return courses.filter((course) => {
       const term = normalize(searchTerm);
@@ -157,20 +142,17 @@ export const CourseManagement: React.FC = () => {
   }, [courses, searchTerm, filterStatus]);
 
   /* -------------------------
-     Date validation against sessions
-     ------------------------- */
+     Date validation
+  ------------------------- */
   const validateDatesWithSessions = (startDate: Date, endDate: Date) => {
     if (sessions.length === 0) return true;
-    const session = sessions[0]; // using first session as general bounds
-    const trainStart = new Date(session.trainStart);
-    const trainEnd = new Date(session.trainEnd);
-
-    if (startDate < trainStart) {
-      alert(`Course start date cannot be before session start: ${trainStart.toDateString()}`);
+    const session = sessions[0];
+    if (startDate < session.trainStart) {
+      alert(`Course start date cannot be before session start: ${session.trainStart.toDateString()}`);
       return false;
     }
-    if (endDate > trainEnd) {
-      alert(`Course end date cannot be after session end: ${trainEnd.toDateString()}`);
+    if (endDate > session.trainEnd) {
+      alert(`Course end date cannot be after session end: ${session.trainEnd.toDateString()}`);
       return false;
     }
     if (endDate < startDate) {
@@ -180,11 +162,9 @@ export const CourseManagement: React.FC = () => {
     return true;
   };
 
-
   const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     if (!trainerExists) return "draft";
     const s = new Date(startDate);
     const e = new Date(endDate);
@@ -197,8 +177,8 @@ export const CourseManagement: React.FC = () => {
   };
 
   /* -------------------------
-     Activity logging helper
-     ------------------------- */
+     Activity logging
+  ------------------------- */
   const logActivity = async (userName: string, action: string, target: string, details?: string) => {
     try {
       await addDoc(collection(db, "activityLogs"), {
@@ -214,11 +194,11 @@ export const CourseManagement: React.FC = () => {
   };
 
   /* -------------------------
-     Helper: find instructor UID by displayName (exact match)
-     ------------------------- */
+     Get instructor UID by name + role
+  ------------------------- */
   const getInstructorUid = async (instructorName: string) => {
     const usersRef = collection(db, "users");
-    const q = query(usersRef, where("displayName", "==", instructorName));
+    const q = query(usersRef, where("displayName", "==", instructorName), where("role", "==", "trainer"));
     const snap = await getDocs(q);
     if (!snap.empty) return snap.docs[0].id;
     return "";
@@ -226,7 +206,7 @@ export const CourseManagement: React.FC = () => {
 
   /* -------------------------
      Add Course
-     ------------------------- */
+  ------------------------- */
   const handleAddCourse = async () => {
     if (!newCourse.title.trim() || !newCourse.instructorName.trim()) {
       alert("Please fill all required fields.");
@@ -235,7 +215,6 @@ export const CourseManagement: React.FC = () => {
     if (!validateDatesWithSessions(newCourse.startDate, newCourse.endDate)) return;
 
     try {
-      // try to find instructor by exact displayName
       const instructorId = await getInstructorUid(newCourse.instructorName);
       const trainerExists = !!instructorId;
       const status = computeStatus(trainerExists, newCourse.startDate, newCourse.endDate);
@@ -244,14 +223,12 @@ export const CourseManagement: React.FC = () => {
         ...newCourse,
         instructorId,
         status,
-        // ensure createdAt/updatedAt are server timestamps
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
       const courseRef = await addDoc(collection(db, "courses"), coursePayload);
 
-      // reflect in local state with Dates converted
       setCourses((prev) => [
         {
           ...newCourse,
@@ -265,7 +242,6 @@ export const CourseManagement: React.FC = () => {
       ]);
 
       await logActivity("Admin", "added", `course: ${newCourse.title}`);
-      // reset form
       setNewCourse({ ...defaultCourseData });
       setNewMaterial("");
       setShowForm(false);
@@ -278,7 +254,7 @@ export const CourseManagement: React.FC = () => {
 
   /* -------------------------
      Save Edited Course
-     ------------------------- */
+  ------------------------- */
   const handleSaveEdit = async () => {
     if (!editingCourse) return;
     if (!editingCourse.instructorName.trim()) {
@@ -318,7 +294,7 @@ export const CourseManagement: React.FC = () => {
 
   /* -------------------------
      Delete Course
-     ------------------------- */
+  ------------------------- */
   const handleDeleteCourse = async (course: Course) => {
     if (!window.confirm("Are you sure you want to delete this course?")) return;
     try {
@@ -333,118 +309,64 @@ export const CourseManagement: React.FC = () => {
   };
 
   /* -------------------------
-     Materials handlers
-     ------------------------- */
-  const handleAddMaterial = () => {
-    if (!newMaterial.trim()) return;
-    if (editingCourse) {
-      setEditingCourse({ ...editingCourse, materials: [...(editingCourse.materials || []), newMaterial.trim()] });
-    } else {
-      setNewCourse({ ...newCourse, materials: [...(newCourse.materials || []), newMaterial.trim()] });
-    }
-    setNewMaterial("");
-  };
-
-  const handleRemoveMaterial = (index: number) => {
-    if (editingCourse) {
-      setEditingCourse({
-        ...editingCourse,
-        materials: (editingCourse.materials || []).filter((_, i) => i !== index),
-      });
-    } else {
-      setNewCourse({
-        ...newCourse,
-        materials: (newCourse.materials || []).filter((_, i) => i !== index),
-      });
-    }
-  };
-
-  /* -------------------------
-     Auto-update logic:
-     When a user is added/updated, check draft courses and update if instructorName matches.
-     This keeps instructorName in course doc and fills instructorId and status -> active/upcoming.
-     ------------------------- */
+     Auto-update draft courses if trainer exists
+  ------------------------- */
   useEffect(() => {
     const usersRef = collection(db, "users");
-    // listen to real-time changes in users collection
     const unsubscribe = onSnapshot(usersRef, async (snapshot) => {
-      try {
-        // build list of changed/added users (we can iterate all docs too)
-        const users = snapshot.docs.map((d) => ({
-          id: d.id,
-          displayName: (d.data() as any).displayName || "",
-        }));
+      const users = snapshot.docs.map((d) => {
+        const data = d.data() as any;
+        return { id: d.id, displayName: data.displayName || "", role: data.role || "" };
+      });
 
-        if (users.length === 0) return;
+      if (users.length === 0) return;
 
-        // fetch all draft courses (status == 'draft') - then compare case-insensitively
-        const coursesRef = collection(db, "courses");
-        const draftQuery = query(coursesRef, where("status", "==", "draft"));
-        const draftSnap = await getDocs(draftQuery);
+      const coursesRef = collection(db, "courses");
+      const draftQuery = query(coursesRef, where("status", "==", "draft"));
+      const draftSnap = await getDocs(draftQuery);
+      if (draftSnap.empty) return;
 
-        if (draftSnap.empty) return;
+      for (const courseDoc of draftSnap.docs) {
+        const courseData = courseDoc.data() as any;
+        const courseInstructorName = normalize(courseData.instructorName);
 
-        for (const courseDoc of draftSnap.docs) {
-          const courseData = courseDoc.data() as any;
-          const courseInstructorName = normalize(courseData.instructorName);
+        const matchedUser = users.find(
+          (u) => normalize(u.displayName) === courseInstructorName && u.role === "trainer"
+        );
 
-          // find matching user (case-insensitive)
-          const matchedUser = users.find((u) => normalize(u.displayName) === courseInstructorName);
+        if (matchedUser) {
+          const start = courseData.startDate?.toDate ? courseData.startDate.toDate() : new Date(courseData.startDate);
+          const end = courseData.endDate?.toDate ? courseData.endDate.toDate() : new Date(courseData.endDate);
+          const newStatus = computeStatus(true, start, end);
 
-          if (matchedUser) {
-            // compute updated status using dates in the course doc
-            const start = courseData.startDate && typeof courseData.startDate.toDate === "function"
-              ? courseData.startDate.toDate()
-              : courseData.startDate instanceof Date
-              ? courseData.startDate
-              : new Date(courseData.startDate);
-            const end = courseData.endDate && typeof courseData.endDate.toDate === "function"
-              ? courseData.endDate.toDate()
-              : courseData.endDate instanceof Date
-              ? courseData.endDate
-              : new Date(courseData.endDate);
+          await updateDoc(doc(db, "courses", courseDoc.id), {
+            instructorId: matchedUser.id,
+            status: newStatus,
+            updatedAt: serverTimestamp(),
+          });
 
-            const newStatus = computeStatus(true, start, end);
+          setCourses((prev) =>
+            prev.map((c) =>
+              c.id === courseDoc.id
+                ? { ...c, instructorId: matchedUser.id, status: newStatus, updatedAt: new Date() }
+                : c
+            )
+          );
 
-            // Update Firestore doc
-            await updateDoc(doc(db, "courses", courseDoc.id), {
-              instructorId: matchedUser.id,
-              status: newStatus,
-              updatedAt: serverTimestamp(),
-            });
-
-            // update local state
-            setCourses((prev) =>
-              prev.map((c) =>
-                c.id === courseDoc.id
-                  ? { ...c, instructorId: matchedUser.id, status: newStatus, updatedAt: new Date() }
-                  : c
-              )
-            );
-
-            await logActivity(
-              "System",
-              "auto-updated",
-              `course: ${courseData.title || courseDoc.id}`,
-              `Matched trainer ${matchedUser.displayName} and set instructorId & status => ${newStatus}`
-            );
-            console.log(`Auto-updated course ${courseData.title || courseDoc.id} with trainer ${matchedUser.displayName}`);
-          }
+          await logActivity(
+            "System",
+            "auto-updated",
+            `course: ${courseData.title || courseDoc.id}`,
+            `Matched trainer ${matchedUser.displayName} and set instructorId & status => ${newStatus}`
+          );
         }
-      } catch (err: any) {
-        console.error("Auto-update users -> courses failed:", err);
       }
     });
 
     return () => unsubscribe();
-    // we intentionally do not depend on courses state to avoid overly frequent triggers
-  }, [/* no deps */]);
+  }, []);
 
-  /* -------------------------
-     UI helpers
-     ------------------------- */
-  const datePickerClass =
-    "border rounded p-2 w-full dark:bg-gray-700 dark:text-white dark:border-gray-600";
+  const datePickerClass = "border rounded p-2 w-full dark:bg-gray-700 dark:text-white dark:border-gray-600";
 
   return (
     <div className="space-y-6">
@@ -483,7 +405,6 @@ export const CourseManagement: React.FC = () => {
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
-              <option value="upcoming">Upcoming</option>
               <option value="draft">Draft</option>
               <option value="completed">Completed</option>
             </select>
@@ -492,15 +413,7 @@ export const CourseManagement: React.FC = () => {
       </Card>
 
       {/* Modal Form */}
-      <Modal
-        isOpen={showForm}
-        onClose={() => {
-          setEditingCourse(null);
-          setNewCourse({ ...defaultCourseData, startDate: new Date(), endDate: new Date() });
-          setNewMaterial("");
-          setShowForm(false);
-        }}
-      >
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)}>
         <div className="p-6 w-full max-w-lg mx-auto">
           <h2 className="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">
             {editingCourse ? "Edit Course" : "Add New Course"}
@@ -516,7 +429,6 @@ export const CourseManagement: React.FC = () => {
                   : setNewCourse({ ...newCourse, title: e.target.value })
               }
             />
-
             <Input
               placeholder="Instructor Name (full display name)"
               value={editingCourse ? editingCourse.instructorName : newCourse.instructorName}
@@ -526,7 +438,6 @@ export const CourseManagement: React.FC = () => {
                   : setNewCourse({ ...newCourse, instructorName: e.target.value })
               }
             />
-
             <Input
               placeholder="Category"
               value={editingCourse ? editingCourse.category : newCourse.category}
@@ -536,7 +447,6 @@ export const CourseManagement: React.FC = () => {
                   : setNewCourse({ ...newCourse, category: e.target.value })
               }
             />
-
             <Input
               type="number"
               placeholder="Hours"
@@ -579,7 +489,6 @@ export const CourseManagement: React.FC = () => {
                 />
               </div>
             </div>
-
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
@@ -588,12 +497,7 @@ export const CourseManagement: React.FC = () => {
             </Button>
             <Button
               variant="outline"
-              onClick={() => {
-                setEditingCourse(null);
-                setNewCourse({ ...defaultCourseData, startDate: new Date(), endDate: new Date() });
-                setNewMaterial("");
-                setShowForm(false);
-              }}
+              onClick={() => setShowForm(false)}
             >
               Cancel
             </Button>
@@ -617,8 +521,7 @@ export const CourseManagement: React.FC = () => {
               <CardContent>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{course.title}</h3>
                 <p className="mt-2 text-sm text-gray-500">
-                  <strong>Trainer: </strong> {course.instructorName || "—"} | <strong>Status:</strong>{" "}
-                  {course.status}
+                  <strong>Trainer: </strong> {course.instructorName || "—"} | <strong>Status:</strong> {course.status}
                 </p>
                 <div className="mt-4 flex gap-2">
                   <Edit2
