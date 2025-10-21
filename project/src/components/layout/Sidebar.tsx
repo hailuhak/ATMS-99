@@ -53,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
     { id: 'courses', label: 'My Courses', icon: BookOpen, roles: ['trainer'] },
     { id: 'sessions', label: 'Training Sessions', icon: Calendar, roles: ['trainer'] },
     { id: 'materials', label: 'Materials', icon: FileText, roles: ['trainer'] },
-    { id: 'grades-trainer', label: 'Trainee Grades', icon: BarChart3, roles: ['trainer'] },
+    { id: 'grades', label: 'Trainee Grades', icon: BarChart3, roles: ['trainer'] },
     {id:'feedback', label: 'Feedback', icon: CheckSquare, roles: ['trainer']},
 
     { id: 'courses', label: 'My Courses', icon: GraduationCap, roles: ['trainee'] },
