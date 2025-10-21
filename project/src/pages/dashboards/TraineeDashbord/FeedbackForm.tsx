@@ -36,6 +36,7 @@ export const FeedbackForm: React.FC = () => {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -134,19 +135,58 @@ export const FeedbackForm: React.FC = () => {
     );
 
     const unsubscribe = onSnapshot(feedbackQuery, (snapshot) => {
-      const data: Feedback[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      } as Feedback));
+      const data: Feedback[] = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Feedback)
+      );
       setFeedbacks(data);
     });
 
     return () => unsubscribe();
   }, [traineeId, trainerId]);
 
-  // Send feedback
+  // Send or update feedback
   const handleSend = async () => {
     if (!message.trim() || !trainerId || !traineeId) return;
+
+    if (editingMessageId) {
+      // Update existing message
+      try {
+        await setDoc(
+          doc(db, "feedbacks", editingMessageId),
+          { message, timestamp: serverTimestamp() },
+          { merge: true }
+        );
+
+        setFeedbacks((prev) =>
+          prev.map((fb) =>
+            fb.id === editingMessageId ? { ...fb, message, timestamp: new Date() } : fb
+          )
+        );
+
+        setMessage("");
+        setEditingMessageId(null);
+        return;
+      } catch (error) {
+        console.error("Error updating message:", error);
+        alert("Failed to update message. Please try again.");
+        return;
+      }
+    }
+
+    // Create new message
+    const tempId = `temp-${Date.now()}`;
+    const newFeedback: Feedback = {
+      id: tempId,
+      trainerId,
+      traineeId,
+      message,
+      timestamp: new Date(),
+      sender: "trainee",
+    };
+
+    setFeedbacks((prev) => [...prev, newFeedback]);
+    setMessage("");
+
     try {
       await addDoc(collection(db, "feedbacks"), {
         trainerId,
@@ -155,36 +195,53 @@ export const FeedbackForm: React.FC = () => {
         timestamp: serverTimestamp(),
         sender: "trainee",
       });
-      setMessage("");
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (error) {
       console.error("Error sending feedback:", error);
     }
   };
 
-  // Delete trainee message permanently
+  // Delete trainee message
   const handleDeleteTrainee = async (id: string) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this message?");
+    if (!confirmDelete) return;
+
     try {
       await deleteDoc(doc(db, "feedbacks", id));
+      setFeedbacks((prev) => prev.filter((fb) => fb.id !== id));
+      alert("Message deleted successfully!");
     } catch (error) {
-      console.error("Error deleting trainee message:", error);
+      console.error("Error deleting message:", error);
+      alert("Failed to delete message. Please try again.");
     }
   };
 
-  // Hide trainer message in hiddenMessages
+  // Hide trainer message
   const handleHideTrainer = async (fb: Feedback) => {
-    try {
-      await setDoc(doc(db, "hiddenMessages", fb.id), fb);
-      await deleteDoc(doc(db, "feedbacks", fb.id));
-    } catch (error) {
-      console.error("Error hiding trainer message:", error);
-    }
-  };
+  const confirmHide = window.confirm("Do you want to hide this trainer message?");
+  if (!confirmHide) return;
+
+  try {
+    // Add to hiddenMessages collection
+    await setDoc(doc(db, "hiddenMessages", fb.id), fb);
+
+    // Delete from feedbacks collection
+    await deleteDoc(doc(db, "feedbacks", fb.id));
+
+    // Remove from local state so UI updates immediately
+    setFeedbacks((prev) => prev.filter((msg) => msg.id !== fb.id));
+
+    alert("Trainer message hidden successfully!");
+  } catch (error) {
+    console.error("Error hiding trainer message:", error);
+    alert("Failed to hide trainer message. Please try again.");
+  }
+};
 
   // Edit trainee message
   const handleEdit = (fb: Feedback) => {
     setMessage(fb.message);
     setTrainerId(fb.trainerId);
+    setEditingMessageId(fb.id);
   };
 
   const handleSelectTrainer = (trainer: any) => {
@@ -245,69 +302,63 @@ export const FeedbackForm: React.FC = () => {
             !message.trim() || !trainerId ? "opacity-50 cursor-not-allowed" : ""
           }`}
         >
-          Send
+          {editingMessageId ? "Update" : "Send"}
         </Button>
       </div>
 
       {/* Feedback messages */}
-<div className="flex flex-col gap-2 overflow-y-auto h-64 pr-2">
-  {feedbacks.length > 0 ? (
-    feedbacks.map((fb) => {
-      const isTrainee = fb.sender === "trainee";
-      return (
- <div
-  key={fb.id}
-  className="flex items-start max-w-full relative group"
->
-  <div
-    className={`relative break-words rounded-lg px-4 py-2 w-[75%] ${
-      isTrainee
-        ? "bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white ml-0" // flush left
-        : "bg-blue-500 dark:bg-blue-600 text-white ml-8" // left with gap
-    } pr-10`}
-  >
-    {fb.message}
+      <div className="flex flex-col gap-2 overflow-y-auto h-64 pr-2">
+        {feedbacks.length > 0 ? (
+          feedbacks.map((fb) => {
+            const isTrainee = fb.sender === "trainee";
+            return (
+              <div key={fb.id} className="flex items-start max-w-full relative group">
+                <div
+                  className={`relative break-words rounded-lg px-4 py-2 w-[75%] ${
+                    isTrainee
+                      ? "bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white ml-0"
+                      : "bg-blue-500 dark:bg-blue-600 text-white ml-8"
+                  } pr-10`}
+                >
+                  {fb.message}
 
-    {isTrainee ? (
-      <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition">
-        <button
-          onClick={() => handleEdit(fb)}
-          title="Edit message"
-          className="text-white dark:text-gray-300 hover:text-yellow-400"
-        >
-          <Edit2 size={14} />
-        </button>
-        <button
-          onClick={() => handleDeleteTrainee(fb.id)}
-          title="Delete message"
-          className="text-white dark:text-gray-300 hover:text-red-500"
-        >
-          <Trash2 size={14} />
-        </button>
+                  {isTrainee ? (
+                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        onClick={() => handleEdit(fb)}
+                        title="Edit message"
+                        className="text-white dark:text-gray-300 hover:text-yellow-400"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTrainee(fb.id)}
+                        title="Delete message"
+                        className="text-white dark:text-gray-300 hover:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
+                      <button
+                        onClick={() => handleHideTrainer(fb)}
+                        title="Hide trainer message"
+                        className="text-white dark:text-gray-300 hover:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-gray-500 text-center w-full mt-2">No feedback yet.</p>
+        )}
+        <div ref={messagesEndRef} />
       </div>
-    ) : (
-      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
-        <button
-          onClick={() => handleHideTrainer(fb)}
-          title="Hide trainer message"
-          className="text-white dark:text-gray-300 hover:text-red-500"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    )}
-  </div>
-</div>
-
-
-      );
-    })
-  ) : (
-    <p className="text-gray-500 text-center w-full mt-2">No feedback yet.</p>
-  )}
-  <div ref={messagesEndRef} />
-</div>
-
     </div>
   );
 };

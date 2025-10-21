@@ -64,6 +64,7 @@ export const TrainerCourses: React.FC = () => {
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [sessionDates, setSessionDates] = useState<{ trainStart: string; trainEnd: string } | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     title: '',
@@ -77,15 +78,27 @@ export const TrainerCourses: React.FC = () => {
 
   const [errors, setErrors] = useState<Partial<FormData>>({});
 
+  // Fetch session dates
+  useEffect(() => {
+    const fetchSession = async () => {
+      const sessionSnapshot = await getDocs(collection(db, 'sessions'));
+      if (!sessionSnapshot.empty) {
+        const sessionData = sessionSnapshot.docs[0].data();
+        setSessionDates({
+          trainStart: sessionData.trainStart,
+          trainEnd: sessionData.trainEnd,
+        });
+      }
+    };
+    fetchSession();
+  }, []);
+
   // Fetch trainer courses
   const fetchCourses = async () => {
     if (!currentUser) return;
     setCoursesLoading(true);
     try {
-      const q = query(
-        collection(db, 'courses'),
-        where('instructorId', '==', currentUser.uid)
-      );
+      const q = query(collection(db, 'courses'), where('instructorId', '==', currentUser.uid));
       const snapshot = await getDocs(q);
       const fetchedCourses: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setCourses(fetchedCourses);
@@ -100,29 +113,34 @@ export const TrainerCourses: React.FC = () => {
     fetchCourses();
   }, [currentUser]);
 
-  // Validate a field
+  // Validate field with session date checks
   const validateField = (name: string, value: string) => {
-    switch (name) {
-      case 'title':
-      case 'category':
-        if (!value.trim()) return 'This field is required';
-        break;
-      case 'hours':
-        if (!value || Number(value) <= 0) return 'Hours must be greater than 0';
-        break;
-      case 'startDate':
-        if (!value) return 'Start date is required';
-        if (formData.endDate && new Date(value) > new Date(formData.endDate))
-          return 'Start date cannot be after end date';
-        break;
-      case 'endDate':
-        if (!value) return 'End date is required';
-        if (formData.startDate && new Date(value) < new Date(formData.startDate))
-          return 'End date cannot be before start date';
-        break;
-      default:
-        return '';
+    if (!value) return 'This field is required';
+
+    const start = name === 'startDate' ? new Date(value) : formData.startDate ? new Date(formData.startDate) : null;
+    const end = name === 'endDate' ? new Date(value) : formData.endDate ? new Date(formData.endDate) : null;
+    const sessionStart = sessionDates ? new Date(sessionDates.trainStart) : null;
+    const sessionEnd = sessionDates ? new Date(sessionDates.trainEnd) : null;
+
+    if (name === 'startDate') {
+      if (end && start! > end) return 'Start date cannot be after end date';
+      if (sessionStart && start! < sessionStart)
+        return `Start date cannot be before session start (${sessionDates!.trainStart})`;
+      if (sessionEnd && start! > sessionEnd)
+        return `Start date cannot be after session end (${sessionDates!.trainEnd})`;
     }
+
+    if (name === 'endDate') {
+      if (start && end! < start) return 'End date cannot be before start date';
+      if (sessionStart && end! < sessionStart)
+        return `End date cannot be before session start (${sessionDates!.trainStart})`;
+      if (sessionEnd && end! > sessionEnd)
+        return `End date cannot be after session end (${sessionDates!.trainEnd})`;
+    }
+
+    if (name === 'hours' && Number(value) <= 0) return 'Hours must be greater than 0';
+    if ((name === 'title' || name === 'category') && !value.trim()) return 'This field is required';
+
     return '';
   };
 
@@ -134,12 +152,9 @@ export const TrainerCourses: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Clear error on focus
   const handleFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name } = e.target;
-    if (errors[name as keyof FormData]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
-    }
+    if (errors[name as keyof FormData]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
   // Save new or edited course
@@ -169,14 +184,12 @@ export const TrainerCourses: React.FC = () => {
           updatedAt: serverTimestamp(),
         });
 
-        // Log edit activity
         await logActivity({
           userId: currentUser.uid,
           userName: currentUser.displayName || 'Trainer',
           trainerId: currentUser.uid,
           action: 'Updated Course',
           target: formData.title,
-          details: `Updated course details`,
         });
 
         setEditingCourseId(null);
@@ -195,7 +208,6 @@ export const TrainerCourses: React.FC = () => {
           students: [],
         });
 
-        // Log add activity
         await logActivity({
           userId: currentUser.uid,
           userName: currentUser.displayName || 'Trainer',
@@ -230,8 +242,6 @@ export const TrainerCourses: React.FC = () => {
 
     try {
       await deleteDoc(doc(db, 'courses', courseId));
-
-      // Log delete activity
       await logActivity({
         userId: currentUser.uid,
         userName: currentUser.displayName || 'Trainer',
@@ -240,7 +250,6 @@ export const TrainerCourses: React.FC = () => {
         target: courseTitle,
         details: `Deleted course with ID: ${courseId}`,
       });
-
       fetchCourses();
     } catch (err) {
       console.error('Error deleting course:', err);
@@ -404,7 +413,8 @@ export const TrainerCourses: React.FC = () => {
             <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-6" />
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No courses assigned yet</h3>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
-              You will see courses here once the admin assigns them to you.            </p>
+              You will see courses here once the admin assigns them to you.
+            </p>
           </div>
         ) : (
           courses.map(course => (
@@ -421,5 +431,3 @@ export const TrainerCourses: React.FC = () => {
     </div>
   );
 };
-
-           
