@@ -17,6 +17,7 @@ import {
   query,
   onSnapshot,
   where,
+  getDoc,
 } from "firebase/firestore";
 import { createUserWithEmailAndPassword, updateEmail } from "firebase/auth";
 
@@ -27,6 +28,7 @@ interface User {
   email: string;
   role: "trainee" | "trainer" | "admin" | "pending";
   createdAt?: Date;
+  isSuperAdmin?: boolean;
 }
 
 export const UserManagement: React.FC = () => {
@@ -35,6 +37,7 @@ export const UserManagement: React.FC = () => {
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [newUser, setNewUser] = useState({
     displayName: "",
@@ -44,15 +47,24 @@ export const UserManagement: React.FC = () => {
   });
 
   const currentUser = auth.currentUser;
-  const currentUserIsSuperAdmin = currentUser?.uid === "SUPER_ADMIN_UID";
+
+  // 🔹 Check if current user is Super Admin
+  useEffect(() => {
+    const fetchSuperAdminStatus = async () => {
+      if (!currentUser) return;
+      const userRef = doc(db, "users", currentUser.uid);
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        setIsSuperAdmin(data.isSuperAdmin === true);
+      }
+    };
+    fetchSuperAdminStatus();
+  }, [currentUser]);
 
   // 🔹 Real-time Firestore subscription
   useEffect(() => {
-    const q = query(
-      collection(db, "users"),
-      orderBy("createdAt", "desc"),
-      limit(50)
-    );
+    const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(50));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const usersData = snapshot.docs.map((doc) => ({
@@ -69,7 +81,7 @@ export const UserManagement: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // 🔹 Activity log helper
+  // 🔹 Log admin actions
   const addActivityLog = async (
     userName: string,
     action: string,
@@ -98,28 +110,23 @@ export const UserManagement: React.FC = () => {
     }
 
     try {
-      // Check for existing user
+      // Prevent duplicate users
       const userRef = collection(db, "users");
       const q = query(userRef, where("email", "==", email));
       const snapshot = await getDocs(q);
-
       if (!snapshot.empty) {
         alert("User with this email already exists!");
         return;
       }
 
-      // Prevent non-super admins from creating new admins
-      if (role === "admin" && !currentUserIsSuperAdmin) {
-        alert("You are not allowed to add another admin!");
+      // Prevent non-super admins from creating admins
+      if (role === "admin" && !isSuperAdmin) {
+        alert("Only Super Admins can create new admins!");
         return;
       }
 
-      // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
 
       const userData: User = {
@@ -130,7 +137,6 @@ export const UserManagement: React.FC = () => {
         createdAt: new Date(),
       };
 
-      // Save user to Firestore
       await setDoc(doc(db, "users", uid), {
         ...userData,
         lastLogin: new Date(),
@@ -149,7 +155,7 @@ export const UserManagement: React.FC = () => {
         currentUser?.displayName || "Admin",
         "added",
         displayName,
-        `Role requested: ${role}`
+        `Requested role: ${role}`
       );
 
       setNewUser({ displayName: "", email: "", password: "", role: "trainee" });
@@ -166,13 +172,13 @@ export const UserManagement: React.FC = () => {
     if (!editingUser || !editingUser.id) return;
 
     try {
-      // Prevent non-super admins from updating other admins
+      // Only super admins can edit other admins
       if (
         editingUser.role === "admin" &&
         editingUser.uid !== currentUser?.uid &&
-        !currentUserIsSuperAdmin
+        !isSuperAdmin
       ) {
-        alert("You cannot edit this admin!");
+        alert("You cannot edit another admin!");
         return;
       }
 
@@ -194,7 +200,7 @@ export const UserManagement: React.FC = () => {
         currentUser?.displayName || "Admin",
         "edited",
         editingUser.displayName,
-        `Role updated to: ${editingUser.role}`
+        `Role changed to: ${editingUser.role}`
       );
 
       setEditingUser(null);
@@ -209,9 +215,14 @@ export const UserManagement: React.FC = () => {
   const handleDeleteUser = async (user: User) => {
     if (!window.confirm("Are you sure you want to delete this user?")) return;
 
-    // Prevent deleting admins for non-super admins or self
+    // Prevent deleting super admin
+    if (user.isSuperAdmin) {
+      alert("You cannot delete the Super Admin!");
+      return;
+    }
+
     if (
-      (user.role === "admin" && !currentUserIsSuperAdmin) ||
+      (user.role === "admin" && !isSuperAdmin) ||
       user.uid === currentUser?.uid
     ) {
       alert("You cannot delete this user!");
@@ -266,7 +277,9 @@ export const UserManagement: React.FC = () => {
             <Input
               placeholder="Email"
               value={newUser.email}
-              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+              onChange={(e) =>
+                setNewUser({ ...newUser, email: e.target.value })
+              }
             />
             <div className="relative">
               <Input
@@ -281,7 +294,11 @@ export const UserManagement: React.FC = () => {
                 className="absolute right-3 top-3 cursor-pointer"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
               </span>
             </div>
             <select
@@ -296,11 +313,14 @@ export const UserManagement: React.FC = () => {
             >
               <option value="trainee">Trainee</option>
               <option value="trainer">Trainer</option>
-              {currentUserIsSuperAdmin && <option value="admin">Admin</option>}
+              {isSuperAdmin && <option value="admin">Admin</option>}
             </select>
             <div className="flex gap-2">
               <Button onClick={handleAddUser}>Save User</Button>
-              <Button variant="outline" onClick={() => setShowAddUserForm(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddUserForm(false)}
+              >
                 Cancel
               </Button>
             </div>
@@ -338,7 +358,9 @@ export const UserManagement: React.FC = () => {
             >
               <option value="trainee">Trainee</option>
               <option value="trainer">Trainer</option>
-              {(currentUserIsSuperAdmin || editingUser.uid === currentUser?.uid) && <option value="admin">Admin</option>}
+              {(isSuperAdmin || editingUser.uid === currentUser?.uid) && (
+                <option value="admin">Admin</option>
+              )}
             </select>
             <div className="flex gap-2">
               <Button onClick={handleSaveEdit}>Save Changes</Button>
@@ -375,54 +397,57 @@ export const UserManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => (
-                    <tr
-                      key={user.id || user.uid}
-                      className="border-b dark:border-gray-600"
-                    >
-                      <td className="px-4 py-2">{user.displayName || "N/A"}</td>
-                      <td className="px-4 py-2">{user.email}</td>
-                      <td className="px-4 py-2 capitalize">{user.role}</td>
-                      <td className="px-4 py-2">
-                        {user.createdAt instanceof Date
-                          ? user.createdAt.toLocaleDateString()
-                          : "-"}
-                      </td>
-                      <td className="px-4 py-2 flex gap-2">
-                        <Edit2
-                          className={`w-5 h-5 cursor-pointer hover:text-blue-700 ${
-                            user.role === "admin" &&
-                            user.uid !== currentUser?.uid &&
-                            !currentUserIsSuperAdmin
-                              ? "text-gray-400 cursor-not-allowed"
-                              : "text-blue-500"
-                          }`}
-                          onClick={() =>
-                            user.role !== "admin" ||
-                            user.uid === currentUser?.uid ||
-                            currentUserIsSuperAdmin
-                              ? setEditingUser(user)
-                              : null
-                          }
-                        />
-                        <Trash2
-                          className={`w-5 h-5 cursor-pointer hover:text-red-700 ${
-                            (user.role === "admin" &&
-                              user.uid !== currentUser?.uid &&
-                              !currentUserIsSuperAdmin) ||
-                            user.uid === currentUser?.uid
-                              ? "text-gray-400 cursor-not-allowed"
-                              : "text-red-500"
-                          }`}
-                          onClick={() =>
-                            user.uid !== currentUser?.uid
-                              ? handleDeleteUser(user)
-                              : null
-                          }
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {users.map((user) => {
+                    const disableEdit =
+                      user.isSuperAdmin && !isSuperAdmin; // disable edit if viewing super admin and not super admin
+                    const disableDelete =
+                      user.isSuperAdmin && !isSuperAdmin; // disable delete same way
+
+                    return (
+                      <tr
+                        key={user.id || user.uid}
+                        className="border-b dark:border-gray-600"
+                      >
+                        <td className="px-4 py-2">
+                          {user.displayName || "N/A"}
+                          {user.isSuperAdmin && (
+                            <span className="ml-2 text-xs text-yellow-500 font-semibold">
+                              (Super Admin)
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">{user.email}</td>
+                        <td className="px-4 py-2 capitalize">{user.role}</td>
+                        <td className="px-4 py-2">
+                          {user.createdAt instanceof Date
+                            ? user.createdAt.toLocaleDateString()
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-2 flex gap-2">
+                          <Edit2
+                            className={`w-5 h-5 ${
+                              disableEdit
+                                ? "text-gray-400 cursor-not-allowed"
+                                : "text-blue-500 cursor-pointer hover:text-blue-700"
+                            }`}
+                            onClick={() => {
+                              if (!disableEdit) setEditingUser(user);
+                            }}
+                          />
+                          <Trash2
+                            className={`w-5 h-5 ${
+                              disableDelete
+                                ? "text-gray-400 cursor-not-allowed"
+                                : "text-red-500 cursor-pointer hover:text-red-700"
+                            }`}
+                            onClick={() => {
+                              if (!disableDelete) handleDeleteUser(user);
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
