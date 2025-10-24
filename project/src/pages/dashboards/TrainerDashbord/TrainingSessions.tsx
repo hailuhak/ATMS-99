@@ -42,20 +42,31 @@ export const TrainingSessions: React.FC = () => {
   const [endTime, setEndTime] = useState("");
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
 
-  // Fetch courses
+  // ✅ Fetch courses of logged-in trainer
   useEffect(() => {
-    const fetchCourses = async () => {
-      const snapshot = await getDocs(collection(db, "courses"));
-      const data = snapshot.docs.map((doc) => ({
-        docId: doc.id,
-        ...(doc.data() as Course),
-      }));
-      setCourses(data);
-    };
-    fetchCourses();
-  }, []);
+    if (!currentUser) return;
 
-  // Fetch trainer-specific sessions
+    const fetchCourses = async () => {
+      try {
+        const q = query(
+          collection(db, "courses"),
+          where("instructorId", "==", currentUser.uid)
+        );
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map((doc) => ({
+          docId: doc.id,
+          ...(doc.data() as Course),
+        }));
+        setCourses(data);
+      } catch (err) {
+        console.error("Error fetching trainer courses:", err);
+      }
+    };
+
+    fetchCourses();
+  }, [currentUser]);
+
+  // ✅ Fetch sessions of current trainer
   useEffect(() => {
     if (!currentUser) return;
     const q = query(
@@ -75,7 +86,7 @@ export const TrainingSessions: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Fetch general sessions
+  // ✅ Fetch all general sessions
   useEffect(() => {
     const fetchSessions = async () => {
       const snapshot = await getDocs(collection(db, "sessions"));
@@ -123,19 +134,37 @@ export const TrainingSessions: React.FC = () => {
     });
   };
 
+  // ✅ Fixed validation logic
   const handleSchedule = async () => {
-    if (!courseId || !date || !startTime || !endTime) return;
+    if (!courseId || !date || !startTime || !endTime) {
+      alert("Please fill all fields.");
+      return;
+    }
 
     const start = new Date(`${date}T${startTime}`);
     const end = new Date(`${date}T${endTime}`);
 
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    if (durationHours <= 0) {
-      alert("End time must be after start time");
+    if (end <= start) {
+      alert("End time must be after start time.");
       return;
     }
 
     const course = courses.find((c) => c.docId === courseId);
+    if (!course) return;
+
+    // 🔍 Validate within ANY valid general training period
+    const validPeriod = generalSessions.some((s) => {
+      const trainStart = new Date(s.trainStart);
+      const trainEnd = new Date(s.trainEnd);
+      return start >= trainStart && end <= trainEnd;
+    });
+
+    if (!validPeriod) {
+      alert("⚠️ This session date is outside the allowed training period.");
+      return;
+    }
+
+    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 
     try {
       if (editingSessionId) {
@@ -172,6 +201,7 @@ export const TrainingSessions: React.FC = () => {
       console.error("Error scheduling session:", err);
     }
 
+    // reset form
     setCourseId("");
     setDate("");
     setStartTime("");
@@ -249,7 +279,7 @@ export const TrainingSessions: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Trainer Sessions */}
+      {/* Trainer Sessions Table */}
       <div>
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">
