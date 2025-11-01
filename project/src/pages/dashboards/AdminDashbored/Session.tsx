@@ -41,11 +41,13 @@ export default function Session() {
     trainEnd: "",
   });
 
+  // ✅ New loading state for disabling buttons
+  const [loading, setLoading] = useState(false);
+
   const currentYear = new Date().getFullYear();
   const nextYear = currentYear + 1;
   const autoTitle = `Session ${currentYear}-${nextYear}`;
 
-  // Fetch all sessions
   const fetchSessions = async () => {
     const snapshot = await getDocs(collection(db, "sessions"));
     setSessions(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as SessionType)));
@@ -55,7 +57,6 @@ export default function Session() {
     fetchSessions();
   }, []);
 
-  // Activity logger
   const logActivity = async (action: string, target: string, message?: string) => {
     try {
       await setDoc(doc(collection(db, "activityLogs")), {
@@ -70,7 +71,6 @@ export default function Session() {
     }
   };
 
-  // Validate session dates
   const validateDates = () => {
     let newErrors = { regEnd: "", trainStart: "", trainEnd: "" };
     const regStartDate = new Date(newSession.regStart);
@@ -97,44 +97,51 @@ export default function Session() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newSession]);
 
-  // Save or update session
   const handleSaveSession = async () => {
     if (!validateDates()) return;
 
-    if (editingId) {
-      const sessionRef = doc(db, "sessions", editingId);
-      await updateDoc(sessionRef, {
-        ...newSession,
-        title: autoTitle,
-      });
-      await logActivity("update", autoTitle, "Session updated successfully.");
-      alert(`✅ ${autoTitle} updated!`);
-    } else {
-      const docRef = await addDoc(collection(db, "sessions"), {
-        ...newSession,
-        title: autoTitle,
-        createdAt: serverTimestamp(),
-      });
-      await logActivity("create", autoTitle, "New session created.");
-      alert(`✅ ${autoTitle} created!`);
-    }
+    setLoading(true); // ✅ Disable buttons during save/update
+    try {
+      if (editingId) {
+        const sessionRef = doc(db, "sessions", editingId);
+        await updateDoc(sessionRef, {
+          ...newSession,
+          title: autoTitle,
+        });
+        await logActivity("update", autoTitle, "Session updated successfully.");
+        alert(`✅ ${autoTitle} updated!`);
+      } else {
+        const docRef = await addDoc(collection(db, "sessions"), {
+          ...newSession,
+          title: autoTitle,
+          createdAt: serverTimestamp(),
+        });
+        await logActivity("create", autoTitle, "New session created.");
+        alert(`✅ ${autoTitle} created!`);
+      }
 
-    setNewSession({ title: "", regStart: "", regEnd: "", trainStart: "", trainEnd: "" });
-    setEditingId(null);
-    setShowForm(false);
-    fetchSessions();
+      setNewSession({ title: "", regStart: "", regEnd: "", trainStart: "", trainEnd: "" });
+      setEditingId(null);
+      setShowForm(false);
+      fetchSessions();
+    } finally {
+      setLoading(false); // ✅ Re-enable buttons after operation
+    }
   };
 
-  // Delete session
   const handleDeleteSession = async (id: string, title: string) => {
-    if (window.confirm("⚠️ Are you sure you want to delete this session?")) {
+    if (!window.confirm("⚠️ Are you sure you want to delete this session?")) return;
+
+    setLoading(true); // ✅ Disable buttons during delete
+    try {
       await deleteDoc(doc(db, "sessions", id));
       await logActivity("delete", title, "Session deleted.");
       fetchSessions();
+    } finally {
+      setLoading(false); // ✅ Re-enable buttons after operation
     }
   };
 
-  // Edit session
   const handleEditSession = (session: SessionType) => {
     setEditingId(session.id || null);
     setNewSession({
@@ -156,6 +163,7 @@ export default function Session() {
             📅 Sessions
           </h2>
           <Button
+            disabled={loading} // ✅ Disable Create/Close Form button while loading
             onClick={() => {
               setShowForm(!showForm);
               setEditingId(null);
@@ -244,10 +252,19 @@ export default function Session() {
 
             {/* Form Buttons */}
             <div className="flex justify-end mt-6 space-x-3">
-              <Button variant="destructive" onClick={() => setShowForm(false)} className="bg-red-500 hover:bg-red-600 text-white">
+              <Button
+                disabled={loading} // ✅ Disable Cancel
+                variant="destructive"
+                onClick={() => setShowForm(false)}
+                className="bg-red-500 hover:bg-red-600 text-white"
+              >
                 Cancel
               </Button>
-              <Button onClick={handleSaveSession} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button
+                disabled={loading} // ✅ Disable Save/Update
+                onClick={handleSaveSession}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
                 {editingId ? "Update" : "Save"}
               </Button>
             </div>
@@ -277,12 +294,14 @@ export default function Session() {
                   <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{s.trainEnd}</td>
                   <td className="px-4 py-2 text-center flex items-center justify-center space-x-3">
                     <button
+                      disabled={loading} // ✅ Disable Edit button
                       className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                       onClick={() => handleEditSession(s)}
                     >
                       <Pencil size={18} />
                     </button>
                     <button
+                      disabled={loading} // ✅ Disable Delete button
                       className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                       onClick={() => handleDeleteSession(s.id!, s.title)}
                     >

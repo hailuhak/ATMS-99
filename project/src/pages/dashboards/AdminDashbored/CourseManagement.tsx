@@ -80,6 +80,7 @@ export const CourseManagement: React.FC = () => {
     defaultCourseData
   );
   const [newMaterial, setNewMaterial] = useState("");
+  const [loading, setLoading] = useState(false); // <-- Added loading state
 
   /* -------------------------
      Sessions (real-time)
@@ -214,6 +215,8 @@ export const CourseManagement: React.FC = () => {
     }
     if (!validateDatesWithSessions(newCourse.startDate, newCourse.endDate)) return;
 
+    setLoading(true); // <-- Disable buttons
+
     try {
       const instructorId = await getInstructorUid(newCourse.instructorName);
       const trainerExists = !!instructorId;
@@ -249,6 +252,8 @@ export const CourseManagement: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       alert(`Error adding course: ${err.message || err}`);
+    } finally {
+      setLoading(false); // <-- Re-enable buttons
     }
   };
 
@@ -262,6 +267,8 @@ export const CourseManagement: React.FC = () => {
       return;
     }
     if (!validateDatesWithSessions(editingCourse.startDate, editingCourse.endDate)) return;
+
+    setLoading(true); // <-- Disable buttons
 
     try {
       const instructorId = await getInstructorUid(editingCourse.instructorName);
@@ -289,6 +296,8 @@ export const CourseManagement: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       alert(`Error updating course: ${err.message || err}`);
+    } finally {
+      setLoading(false); // <-- Re-enable buttons
     }
   };
 
@@ -297,6 +306,9 @@ export const CourseManagement: React.FC = () => {
   ------------------------- */
   const handleDeleteCourse = async (course: Course) => {
     if (!window.confirm("Are you sure you want to delete this course?")) return;
+
+    setLoading(true); // <-- Disable buttons
+
     try {
       await deleteDoc(doc(db, "courses", course.id!));
       setCourses((prev) => prev.filter((c) => c.id !== course.id));
@@ -305,6 +317,8 @@ export const CourseManagement: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       alert(`Error deleting course: ${err.message || err}`);
+    } finally {
+      setLoading(false); // <-- Re-enable buttons
     }
   };
 
@@ -377,6 +391,7 @@ export const CourseManagement: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 mt-1">Manage all courses</p>
         </div>
         <Button
+          disabled={loading} // <-- Disable when loading
           onClick={() => {
             setShowForm(true);
             setEditingCourse(null);
@@ -492,13 +507,10 @@ export const CourseManagement: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-3 mt-6">
-            <Button onClick={editingCourse ? handleSaveEdit : handleAddCourse}>
+            <Button onClick={editingCourse ? handleSaveEdit : handleAddCourse} disabled={loading}>
               {editingCourse ? "Save Changes" : "Add Course"}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowForm(false)}
-            >
+            <Button variant="outline" onClick={() => setShowForm(false)} disabled={loading}>
               Cancel
             </Button>
           </div>

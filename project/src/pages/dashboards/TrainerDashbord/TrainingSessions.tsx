@@ -41,8 +41,9 @@ export const TrainingSessions: React.FC = () => {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false); // ✅ Added processing state
 
-  // ✅ Fetch courses of logged-in trainer
+  // Fetch courses of logged-in trainer
   useEffect(() => {
     if (!currentUser) return;
 
@@ -66,7 +67,7 @@ export const TrainingSessions: React.FC = () => {
     fetchCourses();
   }, [currentUser]);
 
-  // ✅ Fetch sessions of current trainer
+  // Fetch sessions of current trainer
   useEffect(() => {
     if (!currentUser) return;
     const q = query(
@@ -86,7 +87,7 @@ export const TrainingSessions: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // ✅ Fetch all general sessions
+  // Fetch all general sessions
   useEffect(() => {
     const fetchSessions = async () => {
       const snapshot = await getDocs(collection(db, "sessions"));
@@ -134,7 +135,6 @@ export const TrainingSessions: React.FC = () => {
     });
   };
 
-  // ✅ Fixed validation logic
   const handleSchedule = async () => {
     if (!courseId || !date || !startTime || !endTime) {
       alert("Please fill all fields.");
@@ -152,7 +152,6 @@ export const TrainingSessions: React.FC = () => {
     const course = courses.find((c) => c.docId === courseId);
     if (!course) return;
 
-    // 🔍 Validate within ANY valid general training period
     const validPeriod = generalSessions.some((s) => {
       const trainStart = new Date(s.trainStart);
       const trainEnd = new Date(s.trainEnd);
@@ -166,6 +165,7 @@ export const TrainingSessions: React.FC = () => {
 
     const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 
+    setProcessing(true); // ✅ Start processing
     try {
       if (editingSessionId) {
         const sessionRef = doc(db, "trainingSessions", editingSessionId);
@@ -199,9 +199,10 @@ export const TrainingSessions: React.FC = () => {
       }
     } catch (err) {
       console.error("Error scheduling session:", err);
+    } finally {
+      setProcessing(false); // ✅ Stop processing
     }
 
-    // reset form
     setCourseId("");
     setDate("");
     setStartTime("");
@@ -221,11 +222,15 @@ export const TrainingSessions: React.FC = () => {
 
   const handleDelete = async (session: TrainingSession) => {
     if (!confirm("Are you sure you want to delete this session?")) return;
+
+    setProcessing(true); // ✅ Start processing
     try {
       await deleteDoc(doc(db, "trainingSessions", session.id));
       await logActivity("Deleted session", session.courseName, `Session ID: ${session.id}`);
     } catch (err) {
       console.error("Error deleting session:", err);
+    } finally {
+      setProcessing(false); // ✅ Stop processing
     }
   };
 
@@ -287,6 +292,7 @@ export const TrainingSessions: React.FC = () => {
           </h1>
           <Button
             onClick={() => setShowFormModal(true)}
+            disabled={processing} // ✅ Disabled while processing
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white"
           >
             <Plus className="w-4 h-4" /> Add Session
@@ -344,10 +350,12 @@ export const TrainingSessions: React.FC = () => {
                           <Edit2
                             className="w-5 h-5 cursor-pointer text-blue-600 hover:text-blue-400"
                             onClick={() => handleEdit(s)}
+                            style={{ pointerEvents: processing ? "none" : "auto", opacity: processing ? 0.5 : 1 }}
                           />
                           <Trash2
                             className="w-5 h-5 cursor-pointer text-red-600 hover:text-red-400"
                             onClick={() => handleDelete(s)}
+                            style={{ pointerEvents: processing ? "none" : "auto", opacity: processing ? 0.5 : 1 }}
                           />
                         </td>
                       </tr>
@@ -380,6 +388,7 @@ export const TrainingSessions: React.FC = () => {
               value={courseId}
               onChange={(e) => setCourseId(e.target.value)}
               className="border p-2 rounded w-full mb-3 text-gray-900 dark:text-gray-100 dark:bg-gray-700"
+              disabled={processing} // ✅ Disabled while processing
             >
               <option value="">Select Course</option>
               {courses.map((c) => (
@@ -393,6 +402,7 @@ export const TrainingSessions: React.FC = () => {
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="border p-2 rounded w-full mb-3 text-gray-900 dark:text-gray-100 dark:bg-gray-700"
+              disabled={processing} // ✅ Disabled while processing
             />
             <div className="flex gap-2 mb-3">
               <input
@@ -400,16 +410,19 @@ export const TrainingSessions: React.FC = () => {
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 className="border p-2 rounded w-full text-gray-900 dark:text-gray-100 dark:bg-gray-700"
+                disabled={processing} // ✅ Disabled while processing
               />
               <input
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 className="border p-2 rounded w-full text-gray-900 dark:text-gray-100 dark:bg-gray-700"
+                disabled={processing} // ✅ Disabled while processing
               />
             </div>
             <Button
               onClick={handleSchedule}
+              disabled={processing} // ✅ Disabled while processing
               className="w-full bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 text-white"
             >
               {editingSessionId ? "Update Session" : "Save Session"}

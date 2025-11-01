@@ -65,6 +65,8 @@ export const TrainerCourses: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [sessionDates, setSessionDates] = useState<{ trainStart: string; trainEnd: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     title: '',
@@ -160,6 +162,7 @@ export const TrainerCourses: React.FC = () => {
   // Save new or edited course
   const saveCourse = async () => {
     if (!currentUser) return;
+    setLoading(true);
 
     const newErrors: Partial<FormData> = {};
     Object.keys(formData).forEach(key => {
@@ -168,6 +171,7 @@ export const TrainerCourses: React.FC = () => {
     });
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      setLoading(false);
       return;
     }
 
@@ -232,6 +236,8 @@ export const TrainerCourses: React.FC = () => {
       fetchCourses();
     } catch (err) {
       console.error('Error saving course:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -241,6 +247,7 @@ export const TrainerCourses: React.FC = () => {
     if (!currentUser) return;
 
     try {
+      setDeletingId(courseId);
       await deleteDoc(doc(db, 'courses', courseId));
       await logActivity({
         userId: currentUser.uid,
@@ -253,6 +260,8 @@ export const TrainerCourses: React.FC = () => {
       fetchCourses();
     } catch (err) {
       console.error('Error deleting course:', err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -376,7 +385,9 @@ export const TrainerCourses: React.FC = () => {
             error={errors.hours}
           />
           <div className="flex space-x-3">
-            <Button onClick={saveCourse}>{editingCourseId ? 'Update Course' : 'Save Course'}</Button>
+            <Button onClick={saveCourse} disabled={loading}>
+              {loading ? (editingCourseId ? 'Updating...' : 'Saving...') : editingCourseId ? 'Update Course' : 'Save Course'}
+            </Button>
             <Button
               variant="secondary"
               onClick={() => {
@@ -424,6 +435,7 @@ export const TrainerCourses: React.FC = () => {
               showActions={true}
               onEdit={() => handleEditCourse(course)}
               onDelete={() => handleDeleteCourse(course.id, course.title)}
+              disabled={deletingId === course.id}
             />
           ))
         )}
