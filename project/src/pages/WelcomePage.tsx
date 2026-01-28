@@ -41,13 +41,18 @@ description: 'Our platform is designed with simplicity in mind, making it effort
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <motion.div
-            className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 text-white rounded-2xl mb-6"
-            whileHover={{ scale: 1.1, rotate: 5 }}
-            transition={{ type: "spring", stiffness: 300 }}
-          >
-            <GraduationCap className="w-8 h-8" />
-          </motion.div>
+ <motion.div
+  className="inline-flex items-center justify-center w-20 h-20 bg-blue-200 rounded-2xl mb-6"
+  whileHover={{ scale: 1.1, rotate: 1}}
+  transition={{ type: "spring", stiffness: 300 }}
+>
+  <img 
+    src="../src/logo/atms1.png" 
+    alt="Graduation Cap"
+    className="w-18 h-18 object-contain"
+  />
+</motion.div>
+
           
           <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 dark:text-white mb-6">
             Audit Training

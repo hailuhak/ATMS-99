@@ -292,7 +292,7 @@ const handleGoogleSignIn = async () => {
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                Or continue with
+                OR
               </span>
             </div>
           </div>
@@ -309,11 +309,30 @@ const handleGoogleSignIn = async () => {
           </Button>
 
           {/* Toggle Auth Mode */}
-          <div className="mt-6 text-center">
-            <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 font-medium transition-colors">
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-            </button>
-          </div>
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors"
+          >
+            {isLogin ? (
+              <>
+                Don't have an account?{' '}
+                <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                  Register
+                </strong>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                  Sign In
+                </strong>
+              </>
+            )}
+          </button>
+       </div>
+
         </motion.div>
       </motion.div>
     </div>
