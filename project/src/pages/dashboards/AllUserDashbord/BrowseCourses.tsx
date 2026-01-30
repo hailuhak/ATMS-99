@@ -3,6 +3,7 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { CourseCard } from "../../../components/courses/CourseCard";
 import { Input } from "../../../components/ui/Input";
+import { Button } from "../../../components/ui/Button";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { User, Course } from "../../../types";
 

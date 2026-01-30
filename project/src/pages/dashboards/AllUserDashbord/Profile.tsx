@@ -14,6 +14,9 @@ import {
   sendEmailVerification,
 } from "firebase/auth";
 
+
+alert("📧 Verification email sent! Please check your inbox.");
+
 interface ProfileProps {
   currentUser: User | null;
 }
