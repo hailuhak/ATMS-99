@@ -39,12 +39,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   });
 
   const { login, signup } = useAuth();
-
-  // Registration session check
-  useEffect(() => {
-    if (isLogin) return;
+  
+// Registration session check
+useEffect(() => {
+  const checkSession = () => {
+    if (isLogin) return; // Only check signup
 
     const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'), limit(1));
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (snapshot.empty) {
         setCanSignup(false);
@@ -53,8 +55,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
       }
 
       const sessionData = snapshot.docs[0].data();
+
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0); // local midnight
 
       const regStart = new Date(sessionData.regStart);
       const regEnd = new Date(sessionData.regEnd);
@@ -63,7 +66,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
 
       if (today >= regStart && today <= regEnd) {
         setCanSignup(true);
-        setRegistrationMessage('');
+        setRegistrationMessage('Active registration session. You can sign up now!');
       } else if (today < regStart) {
         setCanSignup(false);
         setRegistrationMessage(`Registration opens on ${sessionData.regStart}`);
@@ -73,8 +76,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
       }
     });
 
-    return () => unsubscribe();
-  }, [isLogin]);
+    return unsubscribe;
+  };
+
+  const unsub = checkSession();
+
+  return () => {
+    if (unsub) unsub();
+  };
+}, [isLogin]);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const value = e.target.name === 'role' ? (e.target.value as Role) : e.target.value;
@@ -103,20 +114,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   };
 
 const handleGoogleSignIn = async () => {
-  if (isLogin) {
-    setError('Google sign-in is only available during signup. Please use email/password to login.');
-    return;
-  }
-
-  if (!canSignup) {
-    setError('Registration is not currently available.');
-    return;
-  }
-
   setLoading(true);
   setError('');
 
   try {
+    // If signup is closed, show the registration message and stop
+    if (!isLogin && !canSignup) {
+      setRegistrationMessage(registrationMessage || 'Registration is not currently available.');
+      setLoading(false);
+      return;
+    }
+
     const provider = new GoogleAuthProvider();
     const userCredential = await signInWithPopup(auth, provider);
     const user = userCredential.user;
@@ -124,12 +132,34 @@ const handleGoogleSignIn = async () => {
     const userRef = doc(db, 'users', user.uid);
     const userSnap = await getDoc(userRef);
 
+    // ================= LOGIN MODE =================
+    if (isLogin) {
+      if (!userSnap.exists()) {
+        setError('This account is not registered.');
+        await auth.signOut();
+        return;
+      }
+
+      const userData = userSnap.data();
+
+      if (userData.role === 'pending') {
+        setError('Your account is still pending approval. Waiting for admin.');
+        return;
+      }
+
+      // Approved user can continue to dashboard
+      // navigate('/dashboard');
+      return;
+    }
+
+    // ================= SIGNUP MODE =================
     if (!userSnap.exists()) {
+      // New signup: create both users and pendingUsers
       await setDoc(userRef, {
         uid: user.uid,
         displayName: user.displayName || '',
         email: user.email,
-        role: 'pending',
+        role: 'pending', // pending until admin approves
         photoURL: user.photoURL || '',
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
@@ -139,7 +169,7 @@ const handleGoogleSignIn = async () => {
         uid: user.uid,
         displayName: user.displayName || '',
         email: user.email,
-        role: 'trainee',
+        role: 'trainee', // trainee role for admin approval
         photoURL: user.photoURL || '',
         timestamp: serverTimestamp(),
       });
@@ -148,12 +178,14 @@ const handleGoogleSignIn = async () => {
       return;
     }
 
+    // If user exists already
     const userData = userSnap.data();
     if (userData.role === 'pending') {
       setError('Your account is still pending approval. Waiting for admin.');
       return;
     }
 
+    setError('This account already exists. Please sign in.');
   } catch (err: any) {
     setError(err.message);
   } finally {
