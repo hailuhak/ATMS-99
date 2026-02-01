@@ -80,11 +80,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
       setShowSuccess(true);
       setShowForm(false);
       setSelectedCourse("");
-      setTimeout(() => setShowSuccess(false), 3000);
+      setTimeout(() => setShowSuccess(false), 2000);
     } catch (error: any) {
       setSuccessMessage(error?.message || "Failed to enroll. Try again.");
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      setTimeout(() => setShowSuccess(false), 2000);
     }
   };
 
@@ -143,7 +143,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
             <CardHeader>
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Recent Courses
+                  Recently Enrolled Courses
                 </h3>
                 <Button
                   size="sm"

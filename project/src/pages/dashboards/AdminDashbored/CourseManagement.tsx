@@ -93,7 +93,7 @@ export const CourseManagement: React.FC = () => {
         const safeDate = (v: any) =>
           v && typeof v.toDate === "function" ? v.toDate() : v instanceof Date ? v : new Date(v);
         return {
-          id: d.id,
+          id: data.id,
           title: data.title,
           regStart: safeDate(data.regStart),
           regEnd: safeDate(data.regEnd),
@@ -399,7 +399,7 @@ export const CourseManagement: React.FC = () => {
             setNewMaterial("");
           }}
         >
-          <Plus className="w-4 h-4 mr-2" /> Create Course
+          <Plus className="w-4 h-4 mr-2" /> Add Course
         </Button>
       </div>
 

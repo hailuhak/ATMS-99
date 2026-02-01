@@ -242,28 +242,28 @@ export const TrainerCourses: React.FC = () => {
   };
 
   // Delete a course
-  const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
-    if (!window.confirm('Are you sure you want to delete this course?')) return;
-    if (!currentUser) return;
+  // const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
+  //   if (!window.confirm('Are you sure you want to delete this course?')) return;
+  //   if (!currentUser) return;
 
-    try {
-      setDeletingId(courseId);
-      await deleteDoc(doc(db, 'courses', courseId));
-      await logActivity({
-        userId: currentUser.uid,
-        userName: currentUser.displayName || 'Trainer',
-        trainerId: currentUser.uid,
-        action: 'Deleted Course',
-        target: courseTitle,
-        details: `Deleted course with ID: ${courseId}`,
-      });
-      fetchCourses();
-    } catch (err) {
-      console.error('Error deleting course:', err);
-    } finally {
-      setDeletingId(null);
-    }
-  };
+  //   try {
+  //     setDeletingId(courseId);
+  //     await deleteDoc(doc(db, 'courses', courseId));
+  //     await logActivity({
+  //       userId: currentUser.uid,
+  //       userName: currentUser.displayName || 'Trainer',
+  //       trainerId: currentUser.uid,
+  //       action: 'Deleted Course',
+  //       target: courseTitle,
+  //       details: `Deleted course with ID: ${courseId}`,
+  //     });
+  //     fetchCourses();
+  //   } catch (err) {
+  //     console.error('Error deleting course:', err);
+  //   } finally {
+  //     setDeletingId(null);
+  //   }
+  // };
 
   // Edit a course
   const handleEditCourse = (course: any) => {
@@ -303,7 +303,7 @@ export const TrainerCourses: React.FC = () => {
             });
           }}
         >
-          <Plus className="w-4 h-4 mr-2" /> Create Course
+          <Plus className="w-4 h-4 mr-2" /> Add Course
         </Button>
       </div>
 
@@ -434,7 +434,7 @@ export const TrainerCourses: React.FC = () => {
               course={course}
               showActions={true}
               onEdit={() => handleEditCourse(course)}
-              onDelete={() => handleDeleteCourse(course.id, course.title)}
+              // onDelete={() => handleDeleteCourse(course.id, course.title)}
               disabled={deletingId === course.id}
             />
           ))

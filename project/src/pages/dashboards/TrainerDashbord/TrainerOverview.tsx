@@ -170,7 +170,8 @@ export const TrainerOverview: React.FC = () => {
                   : myCourses
                       .sort((a, b) => new Date(b.startDate || "").getTime() - new Date(a.startDate || "").getTime())
                       .slice(0, 2)
-                      .map((course) => <CourseCard key={course.id} course={course} />)}
+                      .map((course) => <CourseCard key={course.id} course={course} />)
+                }
               </div>
             </CardContent>
           </Card>
@@ -178,7 +179,7 @@ export const TrainerOverview: React.FC = () => {
 
         {/* Recent Activity */}
         <div>
-          <RecentActivity logs={recentActivities} loading={loadingActivities} limitCount={3} />
+          <RecentActivity logs={recentActivities} loading={loadingActivities} limitCount={6} />
         </div>
       </div>
     </div>

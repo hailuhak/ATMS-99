@@ -111,15 +111,20 @@ export const MyCourses: React.FC<MyCoursesProps> = ({ currentUser }) => {
     }
   };
 
-  const handleUnenroll = async (course: Course) => {
-    try {
-      await unenrollCourse(course.id);
-      await logActivity("Unenrolled from Course", course.title || "Unknown Course");
-      showFeedback(`You have unenrolled from "${course.title}"`);
-    } catch (error: any) {
-      showFeedback(error?.message || "Unenroll failed.");
-    }
-  };
+ const handleUnenroll = async (course: Course) => {
+  // Show browser confirmation popup
+  const confirmed = window.confirm(`Do you really want to unenroll from "${course.title}"?`);
+  if (!confirmed) return; // Stop if user clicks Cancel
+
+  try {
+    await unenrollCourse(course.id);
+    await logActivity("Unenrolled from Course", course.title || "Unknown Course");
+    showFeedback(`You have unenrolled from "${course.title}"`);
+  } catch (error: any) {
+    showFeedback(error?.message || "Unenroll failed.");
+  }
+};
+
 
   return (
     <div className="space-y-6">
@@ -225,14 +230,14 @@ export const MyCourses: React.FC<MyCoursesProps> = ({ currentUser }) => {
                         }`}
                       >
                         <CourseCard course={course} showActions={false} className="h-48" />
-                        <Button
+                        {/* <Button
                           size="sm"
                           className="mt-2 w-full"
                           onClick={() => handleEnroll(course)}
                           disabled={isDisabled}
                         >
                           {isDisabled ? "Unavailable" : "Enroll Now"}
-                        </Button>
+                        </Button> */}
                       </div>
                     );
                   })}

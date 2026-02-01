@@ -119,9 +119,9 @@ export const DashboardOverview: React.FC = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard title="Total Users" value={usersCount.toString()} icon={Users} color="blue" />
-        <StatsCard title="Active Courses" value={courses.length.toString()} icon={BookOpen} color="green" />
+        <StatsCard title="Total Courses" value={courses.length.toString()} icon={BookOpen} color="green" />
         <StatsCard title="Completion Rate" value={`${completionRate}%`} icon={TrendingUp} color="yellow" />
-        <StatsCard title="Monthly Sessions" value={monthlySessions.toString()} icon={Activity} color="purple" />
+        <StatsCard title="Monthly Course" value={monthlySessions.toString()} icon={Activity} color="purple" />
       </div>
 
       {/* Recent Courses & Activity */}
