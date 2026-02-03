@@ -101,9 +101,7 @@ const TraineeGrades: React.FC = () => {
                   <th className="px-4 py-2 border-b border-black dark:border-gray-600 text-left text-black dark:text-white">
                     Average
                   </th>
-                  <th className="px-4 py-2 border-b border-black dark:border-gray-600 text-left text-black dark:text-white">
-                    CGPA
-                  </th>
+                
                 </tr>
               </thead>
               <tbody>
@@ -142,12 +140,6 @@ const TraineeGrades: React.FC = () => {
                           rowSpan={finalGrade.courses.length}
                         >
                           {finalGrade.average.toFixed(2)}%
-                        </td>
-                        <td
-                          className="px-4 py-2 border-b border-black dark:border-gray-600 text-black dark:text-white text-center font-semibold"
-                          rowSpan={finalGrade.courses.length}
-                        >
-                          {finalGrade.cgpa}
                         </td>
                       </>
                     )}

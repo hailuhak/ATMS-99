@@ -6,12 +6,14 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   hover?: boolean;
+  onClick?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({ 
-  children, 
-  className, 
-  hover = true 
+export const Card: React.FC<CardProps> = ({
+  children,
+  className,
+  hover = true,
+  onClick
 }) => {
   return (
     <motion.div
@@ -22,33 +24,34 @@ export const Card: React.FC<CardProps> = ({
       )}
       whileHover={hover ? { y: -2 } : undefined}
       transition={{ duration: 0.2 }}
+      onClick={onClick}
     >
       {children}
     </motion.div>
   );
 };
 
-export const CardHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
-  children, 
-  className 
+export const CardHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className
 }) => (
   <div className={clsx('p-6 pb-0', className)}>
     {children}
   </div>
 );
 
-export const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
-  children, 
-  className 
+export const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className
 }) => (
   <div className={clsx('p-6', className)}>
     {children}
   </div>
 );
 
-export const CardFooter: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
-  children, 
-  className 
+export const CardFooter: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className
 }) => (
   <div className={clsx('p-6 pt-0', className)}>
     {children}

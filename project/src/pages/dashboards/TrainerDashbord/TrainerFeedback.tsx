@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { db } from "../../../lib/firebase";
 import {
   collection,
@@ -81,7 +81,7 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
     return () => unsubscribe();
   }, [trainerId, hiddenMessageIds]);
 
-  // Fetch trainee names
+  // Fetch trainee names and auto-select most recent
   useEffect(() => {
     const fetchTraineeNames = async () => {
       const ids = [...new Set(messages.map((m) => m.traineeId))];
@@ -95,9 +95,19 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
         }
       }
       setTraineeNames(names);
+
+      // Auto-select the trainee with the most recent message if none selected
+      if (!selectedTrainee && messages.length > 0) {
+        const sortedMessages = [...messages].sort((a, b) =>
+          (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
+        );
+        if (sortedMessages.length > 0) {
+          setSelectedTrainee(sortedMessages[0].traineeId);
+        }
+      }
     };
     if (messages.length > 0) fetchTraineeNames();
-  }, [messages]);
+  }, [messages, selectedTrainee]);
 
   // Send or update reply
   const handleReply = async () => {
@@ -144,7 +154,16 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
     setMessages(messages.filter((m) => m.id !== msg.id));
   };
 
-  const trainees = [...new Set(messages.map((m) => m.traineeId))];
+  const trainees = useMemo(() => {
+    const uniqueTrainees = [...new Set(messages.map((m) => m.traineeId))];
+    return uniqueTrainees.sort((a, b) => {
+      const msgsA = messages.filter((m) => m.traineeId === a);
+      const msgsB = messages.filter((m) => m.traineeId === b);
+      const lastTimeA = Math.max(...msgsA.map((m) => m.timestamp?.seconds || 0));
+      const lastTimeB = Math.max(...msgsB.map((m) => m.timestamp?.seconds || 0));
+      return lastTimeB - lastTimeA;
+    });
+  }, [messages]);
 
   return (
     <div className="p-4">
@@ -154,86 +173,173 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
 
       <div className="flex gap-4">
         {/* Trainee list */}
-        <div className="w-1/3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg p-2">
-          <h3 className="font-medium mb-2">Trainees</h3>
-          {trainees.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400">No messages yet.</p>
-          ) : (
-            trainees.map((id) => (
-              <div
-                key={id}
-                onClick={() => setSelectedTrainee(id)}
-                className={`p-2 cursor-pointer rounded ${selectedTrainee === id
-                    ? "bg-blue-200 dark:bg-blue-700 font-semibold"
-                    : "hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
-              >
-                {traineeNames[id] || "Unknown"}
+        <div className="w-1/3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-[600px] flex flex-col">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
+            <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">Messages</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Select a trainee to chat</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {trainees.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <p>No messages yet.</p>
               </div>
-            ))
-          )}
+            ) : (
+              trainees.map((id) => (
+                <div
+                  key={id}
+                  onClick={() => setSelectedTrainee(id)}
+                  className={`p-3 cursor-pointer rounded-xl transition-all duration-200 flex items-center gap-3 ${selectedTrainee === id
+                    ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 shadow-sm"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent"
+                    }`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${selectedTrainee === id
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                    }`}>
+                    {traineeNames[id]?.charAt(0) || "U"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium truncate ${selectedTrainee === id ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-gray-100"}`}>
+                      {traineeNames[id] || "Unknown"}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      Click to view conversation
+                    </p>
+                  </div>
+                  {selectedTrainee === id && (
+                    <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Chat area */}
-        <div className="w-2/3 flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-lg p-4">
+        <div className="w-2/3 flex flex-col bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-2xl shadow-sm overflow-hidden h-[600px]">
           {selectedTrainee ? (
             <>
-              <div className="flex-1 overflow-y-auto mb-3 space-y-2">
+              {/* Chat Header */}
+              <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold">
+                    {traineeNames[selectedTrainee]?.charAt(0) || "U"}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {traineeNames[selectedTrainee] || "Unknown Trainee"}
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Trainee
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
                 {messages
                   .filter((m) => m.traineeId === selectedTrainee)
                   .sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0))
                   .map((msg) => (
                     <div
                       key={msg.id}
-                      className={`relative p-2 rounded-xl max-w-xs break-words group ${msg.sender === "trainer"
-                          ? "bg-blue-500 text-white self-end ml-auto mr-2"
-                          : "bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-100 self-start ml-2"
+                      className={`flex w-full ${msg.sender === "trainer" ? "justify-end" : "justify-start"
                         }`}
                     >
-                      {msg.message}
+                      <div
+                        className={`relative max-w-[70%] p-3 rounded-2xl break-words group shadow-sm ${msg.sender === "trainer"
+                          ? "bg-blue-600 text-white rounded-br-none"
+                          : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-bl-none"
+                          }`}
+                      >
+                        <p className="text-sm">{msg.message}</p>
 
-                      <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                        {msg.sender === "trainer" && (
-                          <button onClick={() => handleEdit(msg)}>
-                            <Edit2 size={16} className="text-white dark:text-gray-200" />
+                        {/* Message Actions (Edit/Delete) */}
+                        <div className={`absolute top-0 ${msg.sender === 'trainer' ? '-left-14' : '-right-14'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 h-full`}>
+                          {msg.sender === "trainer" && (
+                            <button
+                              onClick={() => handleEdit(msg)}
+                              className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition"
+                              title="Edit"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleHideMessage(msg)}
+                            className="p-1.5 rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 transition"
+                            title="Delete"
+                          >
+                            <Trash2 size={12} />
                           </button>
-                        )}
-                        <button onClick={() => handleHideMessage(msg)}>
-                          <Trash2
-                            size={16}
-                            className={`${msg.sender === "trainer"
-                                ? "text-white dark:text-gray-200"
-                                : "text-gray-900 dark:text-gray-100"
-                              }`}
-                          />
-                        </button>
+                        </div>
+
+                        {/* Timestamp */}
+                        <div className={`text-[10px] mt-1 ${msg.sender === "trainer" ? "text-blue-100" : "text-gray-400"
+                          }`}>
+                          {msg.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
                       </div>
                     </div>
                   ))}
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Reply box */}
-              <div className="flex flex-col items-center gap-2 mt-4">
-                <textarea
-                  ref={textareaRef}
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  placeholder="Type your reply..."
-                  className="w-full max-w-[80%] resize-none min-h-[80px] max-h-44 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
-                />
-                <Button
-                  onClick={handleReply}
-                  className="px-6 py-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition"
-                >
-                  {editingMessageId ? "Update" : "Send"}
-                </Button>
+              {/* Input Area */}
+              <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-end gap-2 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500 transition-all">
+                  <textarea
+                    ref={textareaRef}
+                    value={reply}
+                    onChange={(e) => setReply(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleReply();
+                      }
+                    }}
+                    placeholder="Type a message..."
+                    className="flex-1 bg-transparent border-none resize-none max-h-32 min-h-[24px] focus:ring-0 p-2 text-sm text-gray-900 dark:text-gray-100"
+                    rows={1}
+                    style={{ height: 'auto', minHeight: '40px' }}
+                  />
+                  <Button
+                    onClick={handleReply}
+                    disabled={!reply.trim()}
+                    className={`p-2 rounded-lg transition-all ${reply.trim()
+                      ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:scale-105"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                      }`}
+                  >
+                    {editingMessageId ? (
+                      <span className="text-xs font-semibold px-2">Update</span>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                      </svg>
+                    )}
+                  </Button>
+                </div>
+                <div className="text-xs text-gray-400 mt-2 text-center">
+                  Press Enter to send, Shift + Enter for new line
+                </div>
               </div>
             </>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400 text-center mt-10">
-              Select a trainee to view messages.
-            </p>
+            <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 dark:bg-gray-900">
+              <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Select a Conversation</h3>
+              <p className="text-gray-500 dark:text-gray-400 mt-1 max-w-xs">
+                Choose a trainee from the list on the left to view and reply to their feedback messages.
+              </p>
+            </div>
           )}
         </div>
       </div>

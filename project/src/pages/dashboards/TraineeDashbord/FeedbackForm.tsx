@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../../contexts/AuthContext";
-import { Trash2, Edit2 } from "lucide-react";
+import { Trash2, Edit2, Search, Users } from "lucide-react";
 
 interface Feedback {
   id: string;
@@ -263,111 +263,159 @@ export const FeedbackForm: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col p-4 bg-white dark:bg-gray-900 rounded-lg shadow-md h-full w-full relative">
-      {/* Trainer input */}
-      <div className="flex items-center mb-3 flex-wrap">
-        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mr-2">
-          Send Feedback to:
-        </h2>
+    <div className="flex flex-col h-[600px] w-full bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+
+      {/* Header / Trainer Selection */}
+      <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold">
+            {trainerId ? (trainerName?.charAt(0) || "T") : <Users size={20} />}
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+              {trainerId ? trainerName : "Select a Trainer"}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {trainerId ? "Trainer" : "Start a conversation"}
+            </p>
+          </div>
+        </div>
+
         <div className="relative" ref={inputWrapperRef}>
-          <input
-            type="text"
-            value={trainerName}
-            onChange={(e) => setTrainerName(e.target.value)}
-            placeholder="Enter trainer name..."
-            className="w-48 p-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:text-gray-100"
-          />
+          <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500/50">
+            <Search size={16} className="text-gray-400 mr-2" />
+            <input
+              type="text"
+              value={trainerName}
+              onChange={(e) => setTrainerName(e.target.value)}
+              placeholder="Search trainer..."
+              className="bg-transparent border-none focus:ring-0 text-sm text-gray-900 dark:text-gray-100 w-48 focus:outline-none"
+            />
+          </div>
           {suggestions.length > 0 && (
-            <ul className="absolute z-10 bg-white dark:bg-gray-800 border rounded-md shadow-md mt-1 w-full max-h-40 overflow-y-auto">
+            <ul className="absolute right-0 top-full mt-2 z-20 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-lg w-64 overflow-hidden">
               {suggestions.map((trainer) => (
                 <li
                   key={trainer.id}
                   onClick={() => handleSelectTrainer(trainer)}
-                  className="px-2 py-1 hover:bg-blue-100 dark:hover:bg-gray-700 cursor-pointer text-sm"
+                  className="px-4 py-3 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-sm flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0"
                 >
-                  {trainer.displayName}
+                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 text-xs font-bold">
+                    {trainer.displayName?.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{trainer.displayName}</p>
+                    <p className="text-xs text-gray-500">Instructor</p>
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        {!trainerId && trainerName.trim() && (
-          <span className="text-red-500 text-sm ml-2">
-            Trainer not found or not assigned to you.
-          </span>
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
+        {!trainerId && (
+          <div className="flex flex-col items-center justify-center h-full text-center p-8 opacity-60">
+            <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+              <Users className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-gray-500 font-medium">Search for a trainer above to start chatting</p>
+          </div>
         )}
-      </div>
 
-      {/* Message input */}
-      <div className="flex flex-col sm:flex-row gap-2 mb-4 w-full">
-        <textarea
-          ref={textareaRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type your feedback..."
-          className="w-full sm:w-1/2 h-10 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:text-gray-100 resize-none overflow-hidden"
-        />
-        <Button
-          onClick={handleSend}
-          disabled={!message.trim() || !trainerId}
-          className={`w-full sm:w-auto mt-2 sm:mt-0 ${!message.trim() || !trainerId ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-        >
-          {editingMessageId ? "Update" : "Send"}
-        </Button>
-      </div>
+        {feedbacks.map((fb) => {
+          const isTrainee = fb.sender === "trainee";
+          return (
+            <div key={fb.id} className={`flex w-full ${isTrainee ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`relative max-w-[75%] p-3 rounded-2xl break-words group shadow-sm ${isTrainee
+                  ? "bg-blue-600 text-white rounded-br-none"
+                  : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-bl-none"
+                  }`}
+              >
+                <p className="text-sm leading-relaxed">{fb.message}</p>
 
-      {/* Feedback messages */}
-      <div className="flex flex-col gap-2 overflow-y-auto h-64 pr-2">
-        {feedbacks.length > 0 ? (
-          feedbacks.map((fb) => {
-            const isTrainee = fb.sender === "trainee";
-            return (
-              <div key={fb.id} className="flex items-start max-w-full relative group">
-                <div
-                  className={`relative break-words rounded-lg px-4 py-2 w-[75%] ${isTrainee
-                    ? "bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white ml-0"
-                    : "bg-blue-500 dark:bg-blue-600 text-white ml-8"
-                    } pr-10`}
-                >
-                  {fb.message}
-
+                {/* Actions */}
+                <div className={`absolute top-0 ${isTrainee ? '-left-14' : '-right-14'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 h-full`}>
                   {isTrainee ? (
-                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <>
                       <button
                         onClick={() => handleEdit(fb)}
-                        title="Edit message"
-                        className="text-white dark:text-gray-300 hover:text-yellow-400"
+                        className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition"
+                        title="Edit"
                       >
-                        <Edit2 size={14} />
+                        <Edit2 size={12} />
                       </button>
                       <button
                         onClick={() => handleDeleteTrainee(fb.id)}
-                        title="Delete message"
-                        className="text-white dark:text-gray-300 hover:text-red-500"
+                        className="p-1.5 rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 transition"
+                        title="Delete"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={12} />
                       </button>
-                    </div>
+                    </>
                   ) : (
-                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
-                      <button
-                        onClick={() => handleHideTrainer(fb)}
-                        title="Hide trainer message"
-                        className="text-white dark:text-gray-300 hover:text-red-500"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleHideTrainer(fb)}
+                      className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition"
+                      title="Hide"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   )}
                 </div>
+
+                <div className={`text-[10px] mt-1 text-right ${isTrainee ? "text-blue-100" : "text-gray-400"}`}>
+                  {fb.timestamp?.toDate ? fb.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
+                </div>
               </div>
-            );
-          })
-        ) : (
-          <p className="text-gray-500 text-center w-full mt-2">No feedback yet.</p>
-        )}
+            </div>
+          );
+        })}
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-end gap-2 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500 transition-all">
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder={trainerId ? "Type your feedback..." : "Select a trainer to start typing..."}
+            className="flex-1 bg-transparent border-none resize-none max-h-32 min-h-[24px] focus:ring-0 p-2 text-sm text-gray-900 dark:text-gray-100 disabled:opacity-50"
+            rows={1}
+            style={{ height: 'auto', minHeight: '40px' }}
+            disabled={!trainerId}
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!message.trim() || !trainerId}
+            className={`p-2 rounded-lg transition-all ${message.trim() && trainerId
+              ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:scale-105"
+              : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+              }`}
+          >
+            {editingMessageId ? (
+              <span className="text-xs font-semibold px-2">Update</span>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+              </svg>
+            )}
+          </Button>
+        </div>
+        <div className="text-xs text-gray-400 mt-2 text-center">
+          {trainerId ? "Press Enter to send, Shift + Enter for new line" : "Find your assigned trainer above to send feedback"}
+        </div>
       </div>
     </div>
   );

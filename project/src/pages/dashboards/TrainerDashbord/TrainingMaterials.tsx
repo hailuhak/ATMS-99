@@ -274,19 +274,67 @@ export const TrainingMaterials: React.FC = () => {
     };
   }, [selectedCourse]);
 
+  // -------------------- Add Link --------------------
+  const [isLinkMode, setIsLinkMode] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkTitle, setLinkTitle] = useState('');
+  const [linkDescription, setLinkDescription] = useState('');
+
+  const handleAddLink = async () => {
+    if (!selectedCourse) {
+      showToast('Please select a course first', 'error');
+      return;
+    }
+    if (!linkUrl.trim() || !linkTitle.trim()) {
+      showToast('Title and URL are required', 'error');
+      return;
+    }
+
+    if (!currentUser) return;
+
+    try {
+      const course = courses.find(c => c.id === selectedCourse);
+      await addDoc(collection(db, 'trainingMaterials'), {
+        name: linkTitle,
+        type: 'video-link', // Special type for links
+        content: linkUrl, // URL itself
+        description: linkDescription,
+        size: 0,
+        uploadedAt: Timestamp.now(),
+        courseId: selectedCourse,
+        courseName: course?.title || 'Unknown Course',
+        trainerId: currentUser.uid,
+        trainerName: currentUser.displayName || currentUser.email,
+      });
+
+      showToast('Video link added successfully!');
+      await logActivity('Added video link', linkTitle, `Course: ${course?.title}`);
+
+      // Reset form
+      setLinkUrl('');
+      setLinkTitle('');
+      setLinkDescription('');
+      setIsLinkMode(false);
+
+    } catch (error) {
+      console.error('Error adding link:', error);
+      showToast('Failed to add video link', 'error');
+    }
+  };
+
+
   // -------------------- Render --------------------
   return (
-    <div className="space-y-6 relative p-4 dark:bg-gray-900 dark:text-gray-100 min-h-screen">
+    <div className="space-y-6 relative p-4 dark:bg-gray-900 dark:text-gray-100 min-h-screen max-w-5xl mx-auto">
       {/* Toasts */}
       <div className="fixed top-5 right-5 flex flex-col gap-2 z-50">
         {toasts.map(t => (
           <div
             key={t.id}
-            className={`px-4 py-2 rounded shadow-lg text-sm font-medium transition-colors duration-200 ${
-              t.type === 'success'
-                ? 'bg-green-500 text-white dark:bg-green-600'
-                : 'bg-red-500 text-white dark:bg-red-600'
-            }`}
+            className={`px-4 py-2 rounded shadow-lg text-sm font-medium transition-colors duration-200 ${t.type === 'success'
+              ? 'bg-green-500 text-white dark:bg-green-600'
+              : 'bg-red-500 text-white dark:bg-red-600'
+              }`}
           >
             {t.message}
           </div>
@@ -296,13 +344,22 @@ export const TrainingMaterials: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-bold">Training Materials</h1>
-        <Button
-          onClick={() => document.getElementById('materialUpload')?.click()}
-          disabled={!selectedCourse}
-          className="flex items-center gap-2"
-        >
-          <Upload className="w-4 h-4" /> Upload File
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setIsLinkMode(!isLinkMode)}
+            disabled={!selectedCourse}
+            className={`flex items-center gap-2 ${isLinkMode ? 'bg-gray-500' : 'bg-purple-600 hover:bg-purple-700'}`}
+          >
+            <VideoIcon className="w-4 h-4" /> {isLinkMode ? 'Cancel Link' : 'Add Video Link'}
+          </Button>
+          <Button
+            onClick={() => document.getElementById('materialUpload')?.click()}
+            disabled={!selectedCourse}
+            className="flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" /> Upload File
+          </Button>
+        </div>
         <input
           type="file"
           id="materialUpload"
@@ -329,19 +386,55 @@ export const TrainingMaterials: React.FC = () => {
         </select>
       </div>
 
+      {/* Add Link Form */}
+      {isLinkMode && (
+        <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 border-purple-200 dark:border-purple-800 animate-in fade-in slide-in-from-top-4">
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            <VideoIcon className="w-5 h-5 text-purple-600" /> Add Video Link (YouTube, Vimeo, etc.)
+          </h3>
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Video Title (e.g., Intro to Safety)"
+              value={linkTitle}
+              onChange={(e) => setLinkTitle(e.target.value)}
+              className="w-full px-3 py-2 rounded border focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600"
+            />
+            <input
+              type="text"
+              placeholder="Video URL (e.g., https://youtube.com/watch?v=...)"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              className="w-full px-3 py-2 rounded border focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600"
+            />
+            <input
+              type="text"
+              placeholder="Description (Optional)"
+              value={linkDescription}
+              onChange={(e) => setLinkDescription(e.target.value)}
+              className="w-full px-3 py-2 rounded border focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 dark:border-gray-600"
+            />
+            <Button onClick={handleAddLink} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+              Save Link
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Drag & Drop Area */}
-      <div
-        ref={dropRef}
-        className={`mt-4 p-8 border-2 border-dashed rounded-lg text-center transition-colors ${
-          isDragging
+      {!isLinkMode && (
+        <div
+          ref={dropRef}
+          className={`mt-4 p-8 border-2 border-dashed rounded-lg text-center transition-colors ${isDragging
             ? 'border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-gray-800'
             : 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800'
-        }`}
-      >
-        {selectedCourse
-          ? 'Drag & drop files here or click "Upload File"'
-          : 'Please select a course to upload files'}
-      </div>
+            }`}
+        >
+          {selectedCourse
+            ? 'Drag & drop files here or click "Upload File"'
+            : 'Please select a course to upload files or add links'}
+        </div>
+      )}
 
       {/* Upload Queue */}
       {uploadQueue.length > 0 && (
@@ -389,38 +482,74 @@ export const TrainingMaterials: React.FC = () => {
         </div>
       )}
 
-      {/* Materials List */}
-      <div className="mt-6 space-y-3">
+      {/* Materials List (Grid Layout) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-6">
         {materials.map(mat => (
           <div
             key={mat.id}
-            className="flex items-center gap-4 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg shadow-sm transition hover:shadow-md"
+            className={`group relative flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 dark:border-gray-700 overflow-hidden ${mat.type === 'video-link' || mat.type.includes('video') ? 'hover:border-purple-300 dark:hover:border-purple-800' : 'hover:border-blue-300 dark:hover:border-blue-800'}`}
           >
-            {getFileIcon(mat.type)}
-            <div className="flex-1 flex flex-col gap-1">
-              <span className="font-medium">{mat.name}</span>
-              {mat.description && <span className="text-sm text-gray-600 dark:text-gray-300">{mat.description}</span>}
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {mat.courseName} - {mat.uploadedAt.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <a
-                href={mat.content}
-                download={mat.name}
-                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition"
-              >
-                <Download className="w-5 h-5" />
-              </a>
-              <button
-                onClick={() => handleDelete(mat)}
-                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+            <div className="p-2.5 flex flex-col h-full gap-2">
+
+              {/* Header: Icon + Actions */}
+              <div className="flex justify-between items-start">
+                {/* Icon with Color Indicator */}
+                <div className={`p-1.5 rounded-md ${mat.type === 'video-link' || mat.type.includes('video') ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300'}`}>
+                  {mat.type === 'video-link' ? <VideoIcon className="w-4 h-4" /> : <div className="scale-90">{getFileIcon(mat.type)}</div>}
+                </div>
+
+                {/* Hover Actions */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <a
+                    href={mat.content}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={mat.type !== 'video-link' ? mat.name : undefined}
+                    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md dark:text-gray-500 dark:hover:bg-gray-700 transition"
+                    title={mat.type === 'video-link' ? 'Open' : 'Download'}
+                  >
+                    {mat.type === 'video-link' ? <Upload className="w-3.5 h-3.5 rotate-45" /> : <Download className="w-3.5 h-3.5" />}
+                  </a>
+                  <button
+                    onClick={() => handleDelete(mat)}
+                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md dark:text-gray-500 dark:hover:bg-gray-700 transition"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-h-[40px] flex flex-col justify-center">
+                <h3 className="font-semibold text-xs text-gray-900 dark:text-gray-100 line-clamp-1 leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={mat.name}>
+                  {mat.name}
+                </h3>
+                {mat.description ? (
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
+                    {mat.description}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 italic">No description</p>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="pt-1.5 border-t border-gray-50 dark:border-gray-700/50 flex justify-between items-center text-[9px] text-gray-400 font-medium uppercase tracking-wide">
+                <span className="truncate max-w-[60%]">{mat.courseName}</span>
+                <span>{mat.size > 0 ? `${(mat.size / 1024 / 1024).toFixed(1)}MB` : 'LINK'}</span>
+              </div>
             </div>
           </div>
         ))}
+        {materials.length === 0 && (
+          <div className="col-span-full py-8 text-center border border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 dark:bg-gray-800 mb-2">
+              <File className="w-5 h-5 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">No materials yet.</p>
+          </div>
+        )}
       </div>
     </div>
   );

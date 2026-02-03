@@ -36,10 +36,29 @@ export const TrainerGrades: React.FC = () => {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [grades, setGrades] = useState<{ [key: string]: number }>({});
   const [userNames, setUserNames] = useState<{ [key: string]: string }>({});
+  const [trainerCourseIds, setTrainerCourseIds] = useState<Set<string>>(new Set());
 
-  // ✅ Fetch enrollments grouped by trainee
+  // ✅ Step 1: Fetch trainer's courses first
   useEffect(() => {
     if (!currentUser) return;
+
+    const fetchTrainerCourses = async () => {
+      try {
+        const q = query(collection(db, 'courses'), where('instructorId', '==', currentUser.uid));
+        const snapshot = await getDocs(q);
+        const courseIds = new Set(snapshot.docs.map(doc => doc.id));
+        setTrainerCourseIds(courseIds);
+      } catch (error) {
+        console.error('Error fetching trainer courses:', error);
+      }
+    };
+
+    fetchTrainerCourses();
+  }, [currentUser]);
+
+  // ✅ Step 2: Fetch enrollments only for trainer's courses
+  useEffect(() => {
+    if (!currentUser || trainerCourseIds.size === 0) return;
 
     const unsubscribe = onSnapshot(collection(db, "enrollments"), async (snapshot) => {
       const data: { [userId: string]: Enrollment } = {};
@@ -49,10 +68,11 @@ export const TrainerGrades: React.FC = () => {
         const d = docSnap.data() as any;
         const userId = d.userId;
 
-        if (!data[userId]) data[userId] = { userId, courses: [] };
         if (Array.isArray(d.courses)) {
           d.courses.forEach((course: any) => {
-            if (course.instructorId === currentUser.uid) {
+            // ✅ Only include courses that belong to this trainer
+            if (trainerCourseIds.has(course.courseId)) {
+              if (!data[userId]) data[userId] = { userId, courses: [] };
               data[userId].courses.push({ courseId: course.courseId, title: course.title });
               userIdsToFetch.add(userId);
             }
@@ -80,6 +100,29 @@ export const TrainerGrades: React.FC = () => {
     });
 
     return () => unsubscribe();
+  }, [currentUser, trainerCourseIds]);
+
+  // ✅ Step 3: Fetch existing grades for this trainer
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fetchGrades = async () => {
+      try {
+        const q = query(collection(db, 'grades'), where('trainerId', '==', currentUser.uid));
+        const snapshot = await getDocs(q);
+
+        const fetchedGrades: { [key: string]: number } = {};
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const key = `${data.traineeId}_${data.courseId}`;
+          fetchedGrades[key] = data.grade;
+        });
+        setGrades(fetchedGrades);
+      } catch (error) {
+        console.error("Error fetching grades:", error);
+      }
+    };
+    fetchGrades();
   }, [currentUser]);
 
   // ✅ Handle input change
@@ -107,68 +150,74 @@ export const TrainerGrades: React.FC = () => {
     }
   };
 
-// ✅ Save grades
-const handleSave = async (trainee: Enrollment) => {
-  if (!currentUser) return;
+  // ✅ Save grades with ownership validation
+  const handleSave = async (trainee: Enrollment) => {
+    if (!currentUser) return;
 
-  const trainerDoc = await getDoc(doc(db, "users", currentUser.uid));
-  const trainerName = trainerDoc.exists()
-    ? (trainerDoc.data() as User).displayName || "Trainer"
-    : "Trainer";
+    const trainerDoc = await getDoc(doc(db, "users", currentUser.uid));
+    const trainerName = trainerDoc.exists()
+      ? (trainerDoc.data() as User).displayName || "Trainer"
+      : "Trainer";
 
-  for (const course of trainee.courses) {
-    const key = `${trainee.userId}_${course.courseId}`;
-    const gradeValue = grades[key];
-    if (gradeValue == null) continue;
+    for (const course of trainee.courses) {
+      // ✅ Ownership validation: Only save grades for courses this trainer owns
+      if (!trainerCourseIds.has(course.courseId)) {
+        console.warn(`Trainer ${currentUser.uid} attempted to grade course ${course.courseId} they don't own`);
+        continue;
+      }
 
-    const q = query(
-      collection(db, "grades"),
-      where("trainerId", "==", currentUser.uid),
-      where("traineeId", "==", trainee.userId),
-      where("courseId", "==", course.courseId)
-    );
+      const key = `${trainee.userId}_${course.courseId}`;
+      const gradeValue = grades[key];
+      if (gradeValue == null) continue;
 
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-      const docRef = snapshot.docs[0].ref;
-      await updateDoc(docRef, { grade: gradeValue, updatedAt: Timestamp.now() });
-    } else {
-      await addDoc(collection(db, "grades"), {
-        traineeId: trainee.userId,
-        traineeName: userNames[trainee.userId] || "Unknown",
-        courseId: course.courseId,
-        courseTitle: course.title,
-        trainerId: currentUser.uid,
-        grade: gradeValue,
-        createdAt: Timestamp.now(),
-      });
+      const q = query(
+        collection(db, "grades"),
+        where("trainerId", "==", currentUser.uid),
+        where("traineeId", "==", trainee.userId),
+        where("courseId", "==", course.courseId)
+      );
+
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const docRef = snapshot.docs[0].ref;
+        await updateDoc(docRef, { grade: gradeValue, updatedAt: Timestamp.now() });
+      } else {
+        await addDoc(collection(db, "grades"), {
+          traineeId: trainee.userId,
+          traineeName: userNames[trainee.userId] || "Unknown",
+          courseId: course.courseId,
+          courseTitle: course.title,
+          trainerId: currentUser.uid,
+          grade: gradeValue,
+          createdAt: Timestamp.now(),
+        });
+      }
+
+      // ✅ Send notification to admin
+      await notifyAdminOnGradeChange(
+        trainerName,
+        userNames[trainee.userId] || "Unknown",
+        course.title,
+        gradeValue
+      );
+
+      // ✅ Add activity log for trainer (this is new)
+      try {
+        await addDoc(collection(db, "activityLogs"), {
+          userName: trainerName,
+          trainerId: currentUser.uid,
+          action: "Updated Grade",
+          target: userNames[trainee.userId] || "Unknown",
+          details: `Set grade to ${gradeValue}% for ${course.title}`,
+          timestamp: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error("Error adding activity log:", err);
+      }
     }
 
-    // ✅ Send notification to admin
-    await notifyAdminOnGradeChange(
-      trainerName,
-      userNames[trainee.userId] || "Unknown",
-      course.title,
-      gradeValue
-    );
-
-    // ✅ Add activity log for trainer (this is new)
-    try {
-      await addDoc(collection(db, "activityLogs"), {
-        userName: trainerName,
-        trainerId: currentUser.uid,
-        action: "Updated Grade",
-        target: userNames[trainee.userId] || "Unknown",
-        details: `Set grade to ${gradeValue}% for ${course.title}`,
-        timestamp: serverTimestamp(),
-      });
-    } catch (err) {
-      console.error("Error adding activity log:", err);
-    }
-  }
-
-  alert(`✅ Grades saved for ${userNames[trainee.userId] || "Unknown"}`);
-};
+    alert(`✅ Grades saved for ${userNames[trainee.userId] || "Unknown"}`);
+  };
 
 
   // ✅ UI
@@ -209,13 +258,18 @@ const handleSave = async (trainee: Enrollment) => {
                         Course
                       </th>
                       <th className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center">
-                        Result (100%)
+                        Grade
+                      </th>
+                      <th className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center">
+                        Add / Edit Grade (0-100)
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {trainee.courses.map((course) => {
                       const key = `${trainee.userId}_${course.courseId}`;
+                      const currentGrade = grades[key];
+
                       return (
                         <tr
                           key={course.courseId}
@@ -223,6 +277,9 @@ const handleSave = async (trainee: Enrollment) => {
                         >
                           <td className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-200">
                             {course.title}
+                          </td>
+                          <td className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center font-bold text-blue-600 dark:text-blue-400">
+                            {currentGrade !== undefined ? `${currentGrade}%` : '-'}
                           </td>
                           <td className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center">
                             <input

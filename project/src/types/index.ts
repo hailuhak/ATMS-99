@@ -16,7 +16,7 @@ export interface User {
 export interface Course {
   id: string;
   title: string;
-  instructorId: string[]; // ✅ keep array since multiple trainers may exist
+  instructorId: string; // Single instructor per course
   instructorName: string;
   hours?: number; // in hours
   duration?: number; // in days
