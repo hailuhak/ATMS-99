@@ -24,13 +24,15 @@ export const Navbar: React.FC = () => {
 
   // Fetch pending users
   useEffect(() => {
+    if (!currentUser || currentUser.role !== 'admin') return; // Only run if user is admin
     const q = query(collection(db, 'pendingUsers'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, snapshot => setPendingUsers(snapshot.size));
     return () => unsubscribe();
-  }, []);
+  }, [currentUser]);
 
   // Fetch trainer notifications
   useEffect(() => {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'trainer')) return; // Only run if user is admin or trainer
     const unsubscribeGrades = onSnapshot(collection(db, 'grades'), gradesSnapshot => {
       const unsubscribeFinal = onSnapshot(collection(db, 'finalGrade'), finalSnapshot => {
         const gradesByTrainee: { [key: string]: any } = {};
@@ -58,7 +60,7 @@ export const Navbar: React.FC = () => {
       return () => unsubscribeFinal();
     });
     return () => unsubscribeGrades();
-  }, []);
+  }, [currentUser]);
 
   // Fetch user info
   useEffect(() => {

@@ -9,6 +9,7 @@ import {
   addDoc,
   doc,
   getDocs,
+  getDoc,
   serverTimestamp,
   setDoc,
   deleteDoc,
@@ -79,12 +80,23 @@ export const FeedbackForm: React.FC = () => {
 
         if (trainerIds.length === 0) return;
 
-        const usersSnapshot = await getDocs(collection(db, "users"));
-        const trainers = usersSnapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((u: any) => trainerIds.includes(u.id));
+        // Fetch each trainer individualy (getDoc is allowed if we update rules)
+        // This avoids listing all users which is restricted
+        const trainers = await Promise.all(
+          trainerIds.map(async (id: string) => {
+            try {
+              const userDoc = await getDoc(doc(db, "users", id));
+              if (userDoc.exists()) {
+                return { id: userDoc.id, ...userDoc.data() };
+              }
+            } catch (e) {
+              console.error(`Failed to fetch trainer ${id}`, e);
+            }
+            return null;
+          })
+        );
 
-        setAvailableTrainers(trainers);
+        setAvailableTrainers(trainers.filter(Boolean));
       } catch (error) {
         console.error("Error fetching assigned trainers:", error);
       }
@@ -217,25 +229,25 @@ export const FeedbackForm: React.FC = () => {
 
   // Hide trainer message
   const handleHideTrainer = async (fb: Feedback) => {
-  const confirmHide = window.confirm("Do you want to hide this trainer message?");
-  if (!confirmHide) return;
+    const confirmHide = window.confirm("Do you want to hide this trainer message?");
+    if (!confirmHide) return;
 
-  try {
-    // Add to hiddenMessages collection
-    await setDoc(doc(db, "hiddenMessages", fb.id), fb);
+    try {
+      // Add to hiddenMessages collection
+      await setDoc(doc(db, "hiddenMessages", fb.id), fb);
 
-    // Delete from feedbacks collection
-    await deleteDoc(doc(db, "feedbacks", fb.id));
+      // Delete from feedbacks collection
+      await deleteDoc(doc(db, "feedbacks", fb.id));
 
-    // Remove from local state so UI updates immediately
-    setFeedbacks((prev) => prev.filter((msg) => msg.id !== fb.id));
+      // Remove from local state so UI updates immediately
+      setFeedbacks((prev) => prev.filter((msg) => msg.id !== fb.id));
 
-    alert("Trainer message hidden successfully!");
-  } catch (error) {
-    console.error("Error hiding trainer message:", error);
-    alert("Failed to hide trainer message. Please try again.");
-  }
-};
+      alert("Trainer message hidden successfully!");
+    } catch (error) {
+      console.error("Error hiding trainer message:", error);
+      alert("Failed to hide trainer message. Please try again.");
+    }
+  };
 
   // Edit trainee message
   const handleEdit = (fb: Feedback) => {
@@ -298,9 +310,8 @@ export const FeedbackForm: React.FC = () => {
         <Button
           onClick={handleSend}
           disabled={!message.trim() || !trainerId}
-          className={`w-full sm:w-auto mt-2 sm:mt-0 ${
-            !message.trim() || !trainerId ? "opacity-50 cursor-not-allowed" : ""
-          }`}
+          className={`w-full sm:w-auto mt-2 sm:mt-0 ${!message.trim() || !trainerId ? "opacity-50 cursor-not-allowed" : ""
+            }`}
         >
           {editingMessageId ? "Update" : "Send"}
         </Button>
@@ -314,11 +325,10 @@ export const FeedbackForm: React.FC = () => {
             return (
               <div key={fb.id} className="flex items-start max-w-full relative group">
                 <div
-                  className={`relative break-words rounded-lg px-4 py-2 w-[75%] ${
-                    isTrainee
-                      ? "bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white ml-0"
-                      : "bg-blue-500 dark:bg-blue-600 text-white ml-8"
-                  } pr-10`}
+                  className={`relative break-words rounded-lg px-4 py-2 w-[75%] ${isTrainee
+                    ? "bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white ml-0"
+                    : "bg-blue-500 dark:bg-blue-600 text-white ml-8"
+                    } pr-10`}
                 >
                   {fb.message}
 

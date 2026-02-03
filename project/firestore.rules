@@ -2,10 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // Users can read and write their own user document
+    // Users can read and write their own user document
+    // Admins and Trainers can read all user documents (needed for name resolution)
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
       allow read: if request.auth != null && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin']);
+        (request.auth.uid == userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'] ||
+         resource.data.role == 'trainer');
     }
     
     // Course access rules
@@ -26,11 +30,58 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     
-    // Training sessions
-    match /sessions/{sessionId} {
+    // Enrollments - users can read/write their own, admin/trainer can read all
+    match /enrollments/{enrollmentId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+    }
+    
+    // Materials - all authenticated users can read, admin/trainer can write
+    match /materials/{materialId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer']);
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+    }
+    
+    // Feedback - users can write their own, admin/trainer can read all
+    match /feedback/{feedbackId} {
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+      allow write: if request.auth != null;
+    }
+    
+    // Training materials - all authenticated users can read, admin/trainer can write
+    match /trainingMaterials/{materialId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+    }
+    
+    // Feedbacks - trainee can write, trainer/admin can read their own feedbacks
+    match /feedbacks/{feedbackId} {
+      // Collection queries (where trainerId == uid)
+      allow list: if request.auth != null;
+      // Individual document reads
+      allow get: if request.auth != null && 
+        (resource.data.trainerId == request.auth.uid || 
+         resource.data.traineeId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow write: if request.auth != null;
+    }
+    
+    // Hidden messages - trainer can manage their own hidden messages
+    match /hiddenMessages/{hiddenId} {
+      // Collection queries
+      allow list: if request.auth != null;
+      // Individual document reads
+      allow get: if request.auth != null && 
+        (resource.data.trainerId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow write: if request.auth != null && 
+        (resource.data.trainerId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow create: if request.auth != null && request.resource.data.trainerId == request.auth.uid;
     }
     
     // Progress tracking
@@ -45,6 +96,53 @@ service cloud.firestore {
       allow read, write: if request.auth != null && 
         (resource.data.userId == request.auth.uid || 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    // Pending users - only admins can read and manage, but users can create their own
+    match /pendingUsers/{userId} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Activity logs - all users can create their own logs, admins/trainers can manage
+    match /activityLogs/{logId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+    }
+    
+    // Training Sessions - admins and trainers can manage, all authenticated users can read
+    match /trainingSessions/{sessionId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+    }
+    
+    // Sessions - publicly readable (for registration check), admin/trainer can write
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+    }
+    
+    // Grades - admin/trainer can manage, trainees can read their own
+    match /grades/{gradeId} {
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+      allow read: if request.auth != null && 
+        (resource.data.traineeId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer']);
+    }
+    
+    // Final grades - admin/trainer can manage, trainees can read their own
+    match /finalGrade/{finalGradeId} {
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
+      allow read: if request.auth != null && 
+        (resource.data.traineeId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer']);
     }
   }
 }

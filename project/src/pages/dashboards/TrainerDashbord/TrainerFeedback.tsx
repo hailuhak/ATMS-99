@@ -58,6 +58,8 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
 
   // Real-time feedback listener
   useEffect(() => {
+    if (!trainerId) return; // Don't run if no trainerId provided
+
     const unsubscribe = onSnapshot(
       query(collection(db, "feedbacks"), where("trainerId", "==", trainerId)),
       (snapshot) => {
@@ -69,6 +71,9 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
           sender: doc.data().sender || "trainee",
         }));
         setMessages(feedbacks.filter((m) => !hiddenMessageIds.includes(m.id)));
+      },
+      (error) => {
+        console.error("Error fetching feedbacks:", error);
       }
     );
 
@@ -158,11 +163,10 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
               <div
                 key={id}
                 onClick={() => setSelectedTrainee(id)}
-                className={`p-2 cursor-pointer rounded ${
-                  selectedTrainee === id
+                className={`p-2 cursor-pointer rounded ${selectedTrainee === id
                     ? "bg-blue-200 dark:bg-blue-700 font-semibold"
                     : "hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
+                  }`}
               >
                 {traineeNames[id] || "Unknown"}
               </div>
@@ -181,11 +185,10 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
                   .map((msg) => (
                     <div
                       key={msg.id}
-                      className={`relative p-2 rounded-xl max-w-xs break-words group ${
-                        msg.sender === "trainer"
+                      className={`relative p-2 rounded-xl max-w-xs break-words group ${msg.sender === "trainer"
                           ? "bg-blue-500 text-white self-end ml-auto mr-2"
                           : "bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-100 self-start ml-2"
-                      }`}
+                        }`}
                     >
                       {msg.message}
 
@@ -198,11 +201,10 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
                         <button onClick={() => handleHideMessage(msg)}>
                           <Trash2
                             size={16}
-                            className={`${
-                              msg.sender === "trainer"
+                            className={`${msg.sender === "trainer"
                                 ? "text-white dark:text-gray-200"
                                 : "text-gray-900 dark:text-gray-100"
-                            }`}
+                              }`}
                           />
                         </button>
                       </div>

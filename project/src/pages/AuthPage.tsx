@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -25,10 +25,13 @@ interface FormData {
 export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [canSignup, setCanSignup] = useState(false);
   const [registrationMessage, setRegistrationMessage] = useState('');
+
+
 
   const [formData, setFormData] = useState<FormData>({
     email: '',
@@ -39,13 +42,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   });
 
   const { login, signup } = useAuth();
-  
-// Registration session check
-useEffect(() => {
-  const checkSession = () => {
-    if (isLogin) return; // Only check signup
 
-    const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'), limit(1));
+  // Registration session check
+  useEffect(() => {
+    // Only check during signup mode
+    if (isLogin) {
+      setCanSignup(false);
+      setRegistrationMessage('');
+      return; // Don't set up listener during login
+    }
+
+    const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'), limit(10));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (snapshot.empty) {
@@ -54,37 +61,53 @@ useEffect(() => {
         return;
       }
 
-      const sessionData = snapshot.docs[0].data();
-
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // local midnight
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
 
-      const regStart = new Date(sessionData.regStart);
-      const regEnd = new Date(sessionData.regEnd);
-      regStart.setHours(0, 0, 0, 0);
-      regEnd.setHours(23, 59, 59, 999);
+      console.log('Checking sessions against today:', todayStr);
 
-      if (today >= regStart && today <= regEnd) {
+      let activeSessionFound = false;
+      let latestSession = snapshot.docs[0].data(); // Fallback for message
+
+      // Check if any of the recent sessions are active
+      for (const doc of snapshot.docs) {
+        const sessionData = doc.data();
+        // Ensure regStart/regEnd exist
+        if (!sessionData.regStart || !sessionData.regEnd) continue;
+
+        console.log(`Checking session: ${sessionData.title}, Start: ${sessionData.regStart}, End: ${sessionData.regEnd}`);
+
+        // Simple dictionary string comparison works for YYYY-MM-DD
+        if (todayStr >= sessionData.regStart && todayStr <= sessionData.regEnd) {
+          activeSessionFound = true;
+          console.log('Active session found!');
+          break;
+        }
+      }
+
+      if (activeSessionFound) {
         setCanSignup(true);
         setRegistrationMessage('Active registration session. You can sign up now!');
-      } else if (today < regStart) {
-        setCanSignup(false);
-        setRegistrationMessage(`Registration opens on ${sessionData.regStart}`);
       } else {
         setCanSignup(false);
-        setRegistrationMessage(`Registration closed on ${sessionData.regEnd}`);
+        // Use the latest session to determine the message
+        if (todayStr < latestSession.regStart) {
+          setRegistrationMessage(`Registration opens on ${latestSession.regStart}`);
+        } else {
+          setRegistrationMessage(`Registration closed on ${latestSession.regEnd}`);
+        }
       }
+    }, (error) => {
+      console.error("Error fetching sessions:", error);
+      setRegistrationMessage(`Error checking registration status: ${error.message}`);
+      setCanSignup(false);
     });
 
-    return unsubscribe;
-  };
-
-  const unsub = checkSession();
-
-  return () => {
-    if (unsub) unsub();
-  };
-}, [isLogin]);
+    return () => unsubscribe();
+  }, [isLogin]);
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -95,103 +118,121 @@ useEffect(() => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Form submitted. isLogin:", isLogin);
     setLoading(true);
     setError('');
 
     try {
       if (isLogin) {
+        console.log("Attempting login...");
         await login(formData.email, formData.password);
       } else {
+        console.log("Attempting signup...");
         if (formData.password !== formData.confirmPassword) throw new Error('Passwords do not match');
         if (formData.password.length < 6) throw new Error('Password must be at least 6 characters long');
-        await signup(formData.email, formData.password, formData.displayName, formData.role);
+
+
+        // Fix role type issue by casting or ensuring valid value (admin is not allowed for signup)
+        const validRole = formData.role as 'trainer' | 'trainee' | 'user';
+
+        console.log("Calling signup function with file...");
+        await signup(
+          formData.email,
+          formData.password,
+          formData.displayName,
+          validRole,
+        );
+        console.log("Signup completed successfully");
       }
     } catch (err: any) {
+      console.error("Signup error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-const handleGoogleSignIn = async () => {
-  setLoading(true);
-  setError('');
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError('');
 
-  try {
-    // If signup is closed, show the registration message and stop
-    if (!isLogin && !canSignup) {
-      setRegistrationMessage(registrationMessage || 'Registration is not currently available.');
-      setLoading(false);
-      return;
-    }
-
-    const provider = new GoogleAuthProvider();
-    const userCredential = await signInWithPopup(auth, provider);
-    const user = userCredential.user;
-
-    const userRef = doc(db, 'users', user.uid);
-    const userSnap = await getDoc(userRef);
-
-    // ================= LOGIN MODE =================
-    if (isLogin) {
-      if (!userSnap.exists()) {
-        setError('This account is not registered.');
-        await auth.signOut();
+    try {
+      // If signup is closed, show the registration message and stop
+      if (!isLogin && !canSignup) {
+        setRegistrationMessage(registrationMessage || 'Registration is not currently available.');
+        setLoading(false);
         return;
       }
 
-      const userData = userSnap.data();
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
 
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      // ================= LOGIN MODE =================
+      if (isLogin) {
+        if (!userSnap.exists()) {
+          // Check if user is in pendingUsers (awaiting approval)
+          const pendingRef = doc(db, 'pendingUsers', user.uid);
+          const pendingSnap = await getDoc(pendingRef);
+
+          if (pendingSnap.exists()) {
+            setError('Your account is still pending approval. Waiting for admin.');
+            return;
+          }
+
+          setError('This account is not registered.');
+          await auth.signOut();
+          return;
+        }
+
+        // User exists in users collection (approved) - allow login
+        return;
+      }
+
+      // ================= SIGNUP MODE =================
+      if (!userSnap.exists()) {
+        // Check if user exists in pendingUsers (already signed up, waiting approval)
+        const pendingRef = doc(db, 'pendingUsers', user.uid);
+        const pendingSnap = await getDoc(pendingRef);
+
+        if (pendingSnap.exists()) {
+          // User already signed up and is pending approval
+          setError('Your account is pending approval. Please wait for admin approval.');
+          return;
+        }
+
+        // New signup: create ONLY in pendingUsers (not in users until approved)
+        await setDoc(pendingRef, {
+          uid: user.uid,
+          displayName: user.displayName || '',
+          email: user.email,
+          role: 'trainee', // default role for admin approval
+          photoURL: user.photoURL || '',
+          createdAt: new Date(),
+          timestamp: serverTimestamp(),
+        });
+
+        setError('Your account is pending approval. Please wait for admin approval.');
+        return;
+      }
+
+      // If user exists already
+      const userData = userSnap.data();
       if (userData.role === 'pending') {
         setError('Your account is still pending approval. Waiting for admin.');
         return;
       }
 
-      // Approved user can continue to dashboard
-      // navigate('/dashboard');
-      return;
+      setError('This account already exists. Please sign in.');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-
-    // ================= SIGNUP MODE =================
-    if (!userSnap.exists()) {
-      // New signup: create both users and pendingUsers
-      await setDoc(userRef, {
-        uid: user.uid,
-        displayName: user.displayName || '',
-        email: user.email,
-        role: 'pending', // pending until admin approves
-        photoURL: user.photoURL || '',
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-      });
-
-      await setDoc(doc(db, 'pendingUsers', user.uid), {
-        uid: user.uid,
-        displayName: user.displayName || '',
-        email: user.email,
-        role: 'trainee', // trainee role for admin approval
-        photoURL: user.photoURL || '',
-        timestamp: serverTimestamp(),
-      });
-
-      setError('Your account is pending approval. Please wait for admin approval.');
-      return;
-    }
-
-    // If user exists already
-    const userData = userSnap.data();
-    if (userData.role === 'pending') {
-      setError('Your account is still pending approval. Waiting for admin.');
-      return;
-    }
-
-    setError('This account already exists. Please sign in.');
-  } catch (err: any) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
 
   return (
@@ -239,7 +280,7 @@ const handleGoogleSignIn = async () => {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             {!isLogin && (
               <Input
                 label="Full Name"
@@ -271,6 +312,7 @@ const handleGoogleSignIn = async () => {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="Enter your password"
+                onCopy={(e) => e.preventDefault()}
               />
               <button
                 type="button"
@@ -283,15 +325,25 @@ const handleGoogleSignIn = async () => {
 
             {!isLogin && (
               <>
-                <Input
-                  label="Confirm Password"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="Confirm your password"
-                />
+                <div className="relative">
+                  <Input
+                    label="Confirm Password"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    placeholder="Confirm your password"
+                    onCopy={(e) => e.preventDefault()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
                   <select
@@ -303,6 +355,7 @@ const handleGoogleSignIn = async () => {
                     <option value="trainee">Trainee</option>
                   </select>
                 </div>
+
               </>
             )}
 
@@ -312,7 +365,7 @@ const handleGoogleSignIn = async () => {
               </div>
             )}
 
-            <Button type="submit" className="w-full" size="lg" loading={loading} disabled={!isLogin && !canSignup}>
+            <Button type="submit" className="w-full" size="lg" loading={loading} disabled={!isLogin && (!canSignup)}>
               {isLogin ? 'Sign In' : 'Create Account'}
             </Button>
           </form>
@@ -332,38 +385,38 @@ const handleGoogleSignIn = async () => {
           {/* Google Sign In */}
           <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={handleGoogleSignIn} disabled={loading}>
             <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.19-2.37H12v4.49h6.44c-.28 1.53-1.13 2.82-2.38 3.69v3.06h3.84c2.25-2.07 3.55-5.13 3.55-8.87z"/>
-              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.92-2.89l-3.84-3.06c-1.05.7-2.41 1.12-4.08 1.12-3.15 0-5.81-2.13-6.77-5H2.18v3.06C4.13 21.87 7.91 24 12 24z"/>
-              <path fill="#FBBC05" d="M5.23 14.18c-.25-.76-.4-1.57-.4-2.43 0-.86.15-1.67.4-2.43v-3.06H2.18C1.57 8.44 1.17 10.11 1.17 12s.4 3.56 1.01 5.31l3.05-2.13z"/>
-              <path fill="#EA4335" d="M12 5.38c1.66 0 3.13.57 4.31 1.66l3.22-3.22C17.85 2.08 15.29 1 12 1 7.91 1 4.13 3.13 2.18 7.07l3.05 2.13c.96-2.87 3.62-4.82 6.77-4.82z"/>
+              <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.19-2.37H12v4.49h6.44c-.28 1.53-1.13 2.82-2.38 3.69v3.06h3.84c2.25-2.07 3.55-5.13 3.55-8.87z" />
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.92-2.89l-3.84-3.06c-1.05.7-2.41 1.12-4.08 1.12-3.15 0-5.81-2.13-6.77-5H2.18v3.06C4.13 21.87 7.91 24 12 24z" />
+              <path fill="#FBBC05" d="M5.23 14.18c-.25-.76-.4-1.57-.4-2.43 0-.86.15-1.67.4-2.43v-3.06H2.18C1.57 8.44 1.17 10.11 1.17 12s.4 3.56 1.01 5.31l3.05-2.13z" />
+              <path fill="#EA4335" d="M12 5.38c1.66 0 3.13.57 4.31 1.66l3.22-3.22C17.85 2.08 15.29 1 12 1 7.91 1 4.13 3.13 2.18 7.07l3.05 2.13c.96-2.87 3.62-4.82 6.77-4.82z" />
             </svg>
             Continue with Google
           </Button>
 
           {/* Toggle Auth Mode */}
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors"
-          >
-            {isLogin ? (
-              <>
-                Don't have an account?{' '}
-                <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
-                  Register
-                </strong>
-              </>
-            ) : (
-              <>
-                Already have an account?{' '}
-                <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
-                  Sign In
-                </strong>
-              </>
-            )}
-          </button>
-       </div>
+          <div className="mt-6 text-center">
+            <button
+              type="button"
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors"
+            >
+              {isLogin ? (
+                <>
+                  Don't have an account?{' '}
+                  <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                    Register
+                  </strong>
+                </>
+              ) : (
+                <>
+                  Already have an account?{' '}
+                  <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                    Sign In
+                  </strong>
+                </>
+              )}
+            </button>
+          </div>
 
         </motion.div>
       </motion.div>
