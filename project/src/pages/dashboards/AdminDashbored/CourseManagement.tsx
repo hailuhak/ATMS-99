@@ -356,13 +356,14 @@ export const CourseManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Course Management</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Manage all courses</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Course Management</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1">Manage all courses</p>
         </div>
         <Button
           disabled={loading}
+          className="w-full sm:w-auto shadow-lg shadow-blue-500/20"
           onClick={() => {
             setShowForm(true);
             setEditingCourse(null);
@@ -373,25 +374,29 @@ export const CourseManagement: React.FC = () => {
         </Button>
       </div>
 
-      <Card>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <Input
-              placeholder="Search courses..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 min-w-96"
-            />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="completed">Completed</option>
-            </select>
+      <Card className="rounded-2xl border-none shadow-sm overflow-hidden">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="relative flex-1">
+              <Input
+                placeholder="Search by title or instructor..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-4 pr-4 transition-all focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full sm:w-auto px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 outline-none transition-all focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
           </div>
         </CardContent>
       </Card>

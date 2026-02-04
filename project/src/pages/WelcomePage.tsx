@@ -2,7 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { GraduationCap, Users, BookOpen, Award } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import welcomeBg from '../logo/unnamed.webp'; // Import local image
+import welcomeBg from '../logo/unnamed.webp';
+import atmsLogo from '../logo/atms1.png'; // Correctly import the logo
 
 interface WelcomePageProps {
   onGetStarted: () => void;
@@ -55,53 +56,53 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onGetStarted }) => {
           <div className="absolute inset-0 bg-gradient-to-b from-blue-900/40 via-transparent to-blue-900/40 mix-blend-overlay" />
 
           {/* Content */}
-        <div className="relative z-10 py-12 px-4 flex flex-col items-center h-screen justify-between">
+          <div className="relative z-10 py-12 px-4 flex flex-col items-center h-screen justify-between">
 
-  {/* Top Content: Logo & Text */}
-  <div className="flex flex-col items-center">
-    <motion.div
-      className="inline-flex items-center justify-center w-20 h-20 bg-blue-200 rounded-2xl mb-8"
-      whileHover={{ scale: 1.1, rotate: 1 }}
-      transition={{ type: "spring", stiffness: 300 }}
-    >
-      <img
-        src="../src/logo/atms1.png"
-        alt="Graduation Cap"
-        className="w-18 h-18 object-contain"
-      />
-    </motion.div>
+            {/* Top Content: Logo & Text */}
+            <div className="flex flex-col items-center">
+              <motion.div
+                className="inline-flex items-center justify-center w-20 h-20 bg-blue-200 rounded-2xl mb-8"
+                whileHover={{ scale: 1.1, rotate: 1 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <img
+                  src={atmsLogo}
+                  alt="OFAG Logo"
+                  className="w-18 h-18 object-contain"
+                />
+              </motion.div>
 
-    <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 drop-shadow-lg text-center">
-      Audit Training
-      <span className="block text-blue-300">
-        Management System
-      </span>
-    </h1>
+              <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 drop-shadow-lg text-center">
+                Audit Training
+                <span className="block text-blue-300">
+                  Management System
+                </span>
+              </h1>
 
-    <p className="text-xl text-gray-100 max-w-3xl mx-auto drop-shadow-md text-center">
-      Streamline your audit training programs with our comprehensive management system.
-      Create, manage, and track training sessions with ease while ensuring compliance and excellence.
-    </p>
-  </div>
+              <p className="text-xl text-gray-100 max-w-3xl mx-auto drop-shadow-md text-center">
+                Streamline your audit training programs with our comprehensive management system.
+                Create, manage, and track training sessions with ease while ensuring compliance and excellence.
+              </p>
+            </div>
 
-  {/* Bottom Content: Button */}
-  <div>
-    <motion.div
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-    >
-      <Button
-        size="lg"
-        onClick={onGetStarted}
-        className="px-10 py-5 text-xl bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl"
-      >
-        Get Started Today
-      </Button>
-    </motion.div>
-  </div>
+            {/* Bottom Content: Button */}
+            <div>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button
+                  size="lg"
+                  onClick={onGetStarted}
+                  className="px-10 py-5 text-xl bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl"
+                >
+                  Get Started Today
+                </Button>
+              </motion.div>
+            </div>
 
-</div>
-        </motion.div> 
+          </div>
+        </motion.div>
 
         {/* Features Grid */}
         <motion.div

@@ -249,79 +249,82 @@ export const UserManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
             User Management
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1">
             Manage users and their roles
           </p>
         </div>
-        <Button onClick={() => setShowAddUserForm(true)}>
+        <Button onClick={() => setShowAddUserForm(true)} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-2" /> Add User
         </Button>
       </div>
 
       {/* Add User Form */}
       {showAddUserForm && (
-        <Card>
-          <CardContent className="space-y-4">
-            <Input
-              placeholder="Full Name"
-              value={newUser.displayName}
-              onChange={(e) =>
-                setNewUser({ ...newUser, displayName: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Email"
-              value={newUser.email}
-              onChange={(e) =>
-                setNewUser({ ...newUser, email: e.target.value })
-              }
-            />
-            <div className="relative">
+        <Card className="rounded-2xl overflow-hidden border-none shadow-lg">
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Create New User</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
-                placeholder="Password"
-                type={showPassword ? "text" : "password"}
-                value={newUser.password}
+                placeholder="Full Name"
+                value={newUser.displayName}
                 onChange={(e) =>
-                  setNewUser({ ...newUser, password: e.target.value })
+                  setNewUser({ ...newUser, displayName: e.target.value })
                 }
               />
-              <span
-                className="absolute right-3 top-3 cursor-pointer"
-                onClick={() => setShowPassword(!showPassword)}
+              <Input
+                placeholder="Email"
+                value={newUser.email}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, email: e.target.value })
+                }
+              />
+              <div className="relative">
+                <Input
+                  placeholder="Password"
+                  type={showPassword ? "text" : "password"}
+                  value={newUser.password}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, password: e.target.value })
+                  }
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+              <select
+                value={newUser.role}
+                onChange={(e) =>
+                  setNewUser({
+                    ...newUser,
+                    role: e.target.value as "trainee" | "trainer" | "admin",
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               >
-                {showPassword ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
-              </span>
+                <option value="trainee">Trainee</option>
+                <option value="trainer">Trainer</option>
+                {isSuperAdmin && <option value="admin">Admin</option>}
+              </select>
             </div>
-            <select
-              value={newUser.role}
-              onChange={(e) =>
-                setNewUser({
-                  ...newUser,
-                  role: e.target.value as "trainee" | "trainer" | "admin",
-                })
-              }
-              className="px-3 py-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white"
-            >
-              <option value="trainee">Trainee</option>
-              <option value="trainer">Trainer</option>
-              {isSuperAdmin && <option value="admin">Admin</option>}
-            </select>
-            <div className="flex gap-2">
-              <Button onClick={handleAddUser}>Save User</Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowAddUserForm(false)}
-              >
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setShowAddUserForm(false)} className="px-6">
                 Cancel
+              </Button>
+              <Button onClick={handleAddUser} className="px-6 shadow-lg shadow-blue-500/20">
+                Save User
               </Button>
             </div>
           </CardContent>
@@ -330,128 +333,188 @@ export const UserManagement: React.FC = () => {
 
       {/* Edit User Form */}
       {editingUser && (
-        <Card>
-          <CardContent className="space-y-4">
-            <Input
-              placeholder="Full Name"
-              value={editingUser.displayName}
-              onChange={(e) =>
-                setEditingUser({ ...editingUser, displayName: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Email"
-              value={editingUser.email}
-              onChange={(e) =>
-                setEditingUser({ ...editingUser, email: e.target.value })
-              }
-            />
-            <select
-              value={editingUser.role}
-              onChange={(e) =>
-                setEditingUser({
-                  ...editingUser,
-                  role: e.target.value as "trainee" | "trainer" | "admin",
-                })
-              }
-              className="px-3 py-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white"
-            >
-              <option value="trainee">Trainee</option>
-              <option value="trainer">Trainer</option>
-              {(isSuperAdmin || editingUser.uid === currentUser?.uid) && (
-                <option value="admin">Admin</option>
-              )}
-            </select>
-            <div className="flex gap-2">
-              <Button onClick={handleSaveEdit}>Save Changes</Button>
-              <Button variant="outline" onClick={() => setEditingUser(null)}>
+        <Card className="rounded-2xl overflow-hidden border-none shadow-lg">
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Edit User Profile</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                placeholder="Full Name"
+                value={editingUser.displayName}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, displayName: e.target.value })
+                }
+              />
+              <Input
+                placeholder="Email"
+                value={editingUser.email}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, email: e.target.value })
+                }
+              />
+              <select
+                value={editingUser.role}
+                onChange={(e) =>
+                  setEditingUser({
+                    ...editingUser,
+                    role: e.target.value as "trainee" | "trainer" | "admin",
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              >
+                <option value="trainee">Trainee</option>
+                <option value="trainer">Trainer</option>
+                {(isSuperAdmin || editingUser.uid === currentUser?.uid) && (
+                  <option value="admin">Admin</option>
+                )}
+              </select>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => setEditingUser(null)} className="px-6">
                 Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} className="px-6 shadow-lg shadow-blue-500/20">
+                Save Changes
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Users Table */}
-      <Card>
-        <CardContent>
+      {/* Users Content */}
+      <Card className="rounded-2xl overflow-hidden border-none shadow-sm">
+        <CardContent className="p-0 sm:p-6">
           {loading ? (
-            <p className="text-center text-gray-500 dark:text-gray-400 py-12">
-              Loading users...
-            </p>
+            <div className="flex flex-col items-center justify-center py-20 space-y-4">
+              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-gray-500 dark:text-gray-400 font-medium">Loading users...</p>
+            </div>
           ) : users.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">No users found.</p>
+            <div className="text-center py-20">
+              <Users className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+              <p className="text-xl font-semibold text-gray-500 dark:text-gray-400">No users found</p>
+              <p className="text-gray-400 mt-2">Try adding a new user to get started.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                <thead className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                  <tr>
-                    <th className="px-4 py-2">Name</th>
-                    <th className="px-4 py-2">Email</th>
-                    <th className="px-4 py-2">Role</th>
-                    <th className="px-4 py-2">Created At</th>
-                    <th className="px-4 py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => {
-                    const disableEdit =
-                      user.isSuperAdmin && !isSuperAdmin; // disable edit if viewing super admin and not super admin
-                    const disableDelete =
-                      user.isSuperAdmin && !isSuperAdmin; // disable delete same way
+            <div className="space-y-4">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                  <thead className="bg-gray-50 dark:bg-gray-800/50 text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 font-bold">
+                    <tr>
+                      <th className="px-6 py-4">Name</th>
+                      <th className="px-6 py-4">Email Address</th>
+                      <th className="px-6 py-4">Access Role</th>
+                      <th className="px-6 py-4">Created On</th>
+                      <th className="px-6 py-4 text-right">Settings</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {users.map((user) => {
+                      const disableEdit = user.isSuperAdmin && !isSuperAdmin;
+                      const disableDelete = user.isSuperAdmin && !isSuperAdmin;
 
-                    return (
-                      <tr
-                        key={user.id || user.uid}
-                        className="border-b dark:border-gray-600"
-                      >
-                        <td className="px-4 py-2">
-                          {user.displayName || "N/A"}
-                          {user.isSuperAdmin && (
-                            <span className="ml-2 text-xs text-yellow-500 font-semibold">
-                              (Super Admin)
+                      return (
+                        <tr key={user.id || user.uid} className="hover:bg-gray-50/80 dark:hover:bg-gray-800/80 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold mr-3 shrink-0">
+                                {user.displayName?.charAt(0) || "U"}
+                              </div>
+                              <div className="font-semibold text-gray-900 dark:text-white truncate max-w-[150px]">
+                                {user.displayName || "N/A"}
+                                {user.isSuperAdmin && (
+                                  <span className="block text-[10px] text-yellow-600 uppercase tracking-tighter">Super Admin</span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 truncate max-w-[200px]">{user.email}</td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide
+                              ${user.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                                user.role === 'trainer' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
+                              {user.role}
                             </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">{user.email}</td>
-                        <td className="px-4 py-2 capitalize">{user.role}</td>
-                        <td className="px-4 py-2">
+                          </td>
+                          <td className="px-6 py-4 text-gray-400">
+                            {user.createdAt instanceof Date
+                              ? user.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              : "-"}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-3 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                disabled={disableEdit}
+                                className={`p-2 rounded-lg transition-colors ${disableEdit ? "text-gray-300 dark:text-gray-700 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"}`}
+                                onClick={() => !disableEdit && setEditingUser(user)}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                disabled={disableDelete}
+                                className={`p-2 rounded-lg transition-colors ${disableDelete ? "text-gray-300 dark:text-gray-700 cursor-not-allowed" : "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"}`}
+                                onClick={() => !disableDelete && handleDeleteUser(user)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card Layout */}
+              <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-700 px-4">
+                {users.map((user) => (
+                  <div key={user.id || user.uid} className="py-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/20 shrink-0">
+                          {user.displayName?.charAt(0) || "U"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 dark:text-white truncate">{user.displayName || "N/A"}</p>
+                          <span className={`text-[10px] font-black uppercase tracking-widest ${user.role === 'admin' ? 'text-purple-500' : user.role === 'trainer' ? 'text-blue-500' : 'text-emerald-500'}`}>
+                            {user.role}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-blue-500 active:scale-90 transition-transform"
+                          onClick={() => setEditingUser(user)}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-red-500 active:scale-90 transition-transform"
+                          onClick={() => handleDeleteUser(user)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <p className="text-gray-400 mb-1">Email</p>
+                        <p className="text-gray-900 dark:text-white font-medium break-all">{user.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-1">Joined</p>
+                        <p className="text-gray-900 dark:text-white font-medium">
                           {user.createdAt instanceof Date
-                            ? user.createdAt.toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })
+                            ? user.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                             : "-"}
-                        </td>
-                        <td className="px-4 py-2 flex gap-2">
-                          <Edit2
-                            className={`w-5 h-5 ${disableEdit
-                              ? "text-gray-400 cursor-not-allowed"
-                              : "text-blue-500 cursor-pointer hover:text-blue-700"
-                              }`}
-                            onClick={() => {
-                              if (!disableEdit) setEditingUser(user);
-                            }}
-                          />
-                          <Trash2
-                            className={`w-5 h-5 ${disableDelete
-                              ? "text-gray-400 cursor-not-allowed"
-                              : "text-red-500 cursor-pointer hover:text-red-700"
-                              }`}
-                            onClick={() => {
-                              if (!disableDelete) handleDeleteUser(user);
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
