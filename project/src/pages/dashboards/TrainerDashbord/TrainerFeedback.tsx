@@ -166,20 +166,20 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
   }, [messages]);
 
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
-        Trainee Feedback Messages
+    <div className="p-2 sm:p-4">
+      <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100 px-2">
+        Trainee Feedback
       </h2>
 
-      <div className="flex gap-4">
+      <div className="flex flex-col lg:flex-row gap-4 lg:h-[600px]">
         {/* Trainee list */}
-        <div className="w-1/3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-[600px] flex flex-col">
+        <div className={`${selectedTrainee ? 'hidden lg:flex' : 'flex'} w-full lg:w-1/3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex-col h-[500px] lg:h-full`}>
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
             <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">Messages</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Select a trainee to chat</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
             {trainees.length === 0 ? (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                 <p>No messages yet.</p>
@@ -194,23 +194,20 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
                     : "hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent"
                     }`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ${selectedTrainee === id
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm shrink-0 ${selectedTrainee === id
                     ? "bg-blue-600 text-white"
                     : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                     }`}>
                     {traineeNames[id]?.charAt(0) || "U"}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${selectedTrainee === id ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-gray-100"}`}>
+                    <p className={`text-sm font-bold truncate ${selectedTrainee === id ? "text-blue-700 dark:text-blue-300" : "text-gray-900 dark:text-gray-100"}`}>
                       {traineeNames[id] || "Unknown"}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                       Click to view conversation
                     </p>
                   </div>
-                  {selectedTrainee === id && (
-                    <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-                  )}
                 </div>
               ))
             )}
@@ -218,20 +215,26 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
         </div>
 
         {/* Chat area */}
-        <div className="w-2/3 flex flex-col bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-2xl shadow-sm overflow-hidden h-[600px]">
+        <div className={`${!selectedTrainee ? 'hidden lg:flex' : 'flex'} w-full lg:w-2/3 flex-col bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-2xl shadow-sm overflow-hidden h-[500px] lg:h-full`}>
           {selectedTrainee ? (
             <>
               {/* Chat Header */}
-              <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm z-10">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold">
+                  <button
+                    onClick={() => setSelectedTrainee(null)}
+                    className="lg:hidden p-2 -ml-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-500"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold border border-white dark:border-gray-700">
                     {traineeNames[selectedTrainee]?.charAt(0) || "U"}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                    <h3 className="font-bold text-gray-900 dark:text-gray-100 leading-tight">
                       {traineeNames[selectedTrainee] || "Unknown Trainee"}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">
                       Trainee
                     </p>
                   </div>
@@ -239,7 +242,7 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
               </div>
 
               {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-gray-50 dark:bg-gray-900/50 custom-scrollbar">
                 {messages
                   .filter((m) => m.traineeId === selectedTrainee)
                   .sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0))
@@ -250,19 +253,19 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
                         }`}
                     >
                       <div
-                        className={`relative max-w-[70%] p-3 rounded-2xl break-words group shadow-sm ${msg.sender === "trainer"
+                        className={`relative max-w-[85%] sm:max-w-[75%] p-3 sm:p-4 rounded-3xl break-words group shadow-sm transition-all ${msg.sender === "trainer"
                           ? "bg-blue-600 text-white rounded-br-none"
                           : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-bl-none"
                           }`}
                       >
-                        <p className="text-sm">{msg.message}</p>
+                        <p className="text-sm font-medium leading-relaxed">{msg.message}</p>
 
-                        {/* Message Actions (Edit/Delete) */}
-                        <div className={`absolute top-0 ${msg.sender === 'trainer' ? '-left-14' : '-right-14'} opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 h-full`}>
+                        {/* Message Actions */}
+                        <div className={`absolute top-0 ${msg.sender === 'trainer' ? '-left-12' : '-right-12'} opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1.5 h-full pt-1`}>
                           {msg.sender === "trainer" && (
                             <button
                               onClick={() => handleEdit(msg)}
-                              className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition"
+                              className="p-1.5 sm:p-2 rounded-xl bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700 text-blue-600 dark:text-blue-400 hover:scale-110 active:scale-95 transition-all"
                               title="Edit"
                             >
                               <Edit2 size={12} />
@@ -270,7 +273,7 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
                           )}
                           <button
                             onClick={() => handleHideMessage(msg)}
-                            className="p-1.5 rounded-full bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 transition"
+                            className="p-1.5 sm:p-2 rounded-xl bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700 text-red-600 dark:text-red-400 hover:scale-110 active:scale-95 transition-all"
                             title="Delete"
                           >
                             <Trash2 size={12} />
@@ -278,7 +281,7 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
                         </div>
 
                         {/* Timestamp */}
-                        <div className={`text-[10px] mt-1 ${msg.sender === "trainer" ? "text-blue-100" : "text-gray-400"
+                        <div className={`text-[10px] mt-1.5 font-semibold ${msg.sender === "trainer" ? "text-blue-100/80" : "text-gray-400"
                           }`}>
                           {msg.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
@@ -289,8 +292,8 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
               </div>
 
               {/* Input Area */}
-              <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-end gap-2 bg-gray-50 dark:bg-gray-900 p-2 rounded-xl border border-gray-200 dark:border-gray-700 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500 transition-all">
+              <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-inner">
+                <div className="flex items-end gap-3 bg-gray-50 dark:bg-gray-900/50 p-2 sm:p-3 rounded-2xl border border-gray-200 dark:border-gray-700 focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500 transition-all">
                   <textarea
                     ref={textareaRef}
                     value={reply}
@@ -302,41 +305,42 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
                       }
                     }}
                     placeholder="Type a message..."
-                    className="flex-1 bg-transparent border-none resize-none max-h-32 min-h-[24px] focus:ring-0 p-2 text-sm text-gray-900 dark:text-gray-100"
+                    className="flex-1 bg-transparent border-none resize-none max-h-40 min-h-[24px] focus:ring-0 p-2 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 custom-scrollbar outline-none"
                     rows={1}
                     style={{ height: 'auto', minHeight: '40px' }}
                   />
                   <Button
                     onClick={handleReply}
                     disabled={!reply.trim()}
-                    className={`p-2 rounded-lg transition-all ${reply.trim()
-                      ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:scale-105"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                    className={`p-3 rounded-xl transition-all shadow-lg active:scale-95 ${reply.trim()
+                      ? "bg-gradient-to-tr from-blue-600 to-blue-500 text-white shadow-blue-500/20"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed grayscale"
                       }`}
                   >
                     {editingMessageId ? (
-                      <span className="text-xs font-semibold px-2">Update</span>
+                      <span className="text-xs font-bold px-2">SAVE</span>
                     ) : (
-                      <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5" stroke="currentColor" strokeWidth={2}>
+                      <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5 sm:w-6 sm:h-6 rotate-45" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                       </svg>
                     )}
                   </Button>
                 </div>
-                <div className="text-xs text-gray-400 mt-2 text-center">
-                  Press Enter to send, Shift + Enter for new line
+                <div className="hidden sm:flex justify-between items-center mt-3 px-1">
+                  <span className="text-[10px] text-gray-400 font-medium tracking-tight">Shift + Enter for new line</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded">Secure Feedbacks</span>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 dark:bg-gray-900">
-              <div className="w-16 h-16 bg-gray-200 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex flex-col items-center justify-center h-full text-center p-12 bg-gray-50 dark:bg-gray-900/50">
+              <div className="w-20 h-20 bg-white dark:bg-gray-800 rounded-3xl flex items-center justify-center mb-6 shadow-2xl shadow-blue-500/10 border border-gray-100 dark:border-gray-700 rotate-3">
+                <svg className="w-10 h-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Select a Conversation</h3>
-              <p className="text-gray-500 dark:text-gray-400 mt-1 max-w-xs">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Select a Conversation</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs font-medium leading-relaxed">
                 Choose a trainee from the list on the left to view and reply to their feedback messages.
               </p>
             </div>

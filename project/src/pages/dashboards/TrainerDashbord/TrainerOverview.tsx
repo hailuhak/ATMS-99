@@ -159,19 +159,19 @@ export const TrainerOverview: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Trainer Dashboard
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">
             Welcome back, {currentUser?.displayName || "Trainer"}
           </p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <StatsCard title="My Courses" value={stats.courses.toString()} icon={BookOpen} color="blue" />
         <StatsCard title="Active Sessions" value={stats.activeSessions.toString()} icon={Calendar} color="green" />
         <StatsCard title="Total Students" value={stats.totalStudents.toString()} icon={Users} color="yellow" />
@@ -179,9 +179,9 @@ export const TrainerOverview: React.FC = () => {
       </div>
 
       {/* Courses and Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Recent Courses */}
-        <div className={showAllCourses ? "lg:col-span-3" : "lg:col-span-2"}>
+        <div className={showAllCourses ? "xl:col-span-3" : "xl:col-span-2"}>
           <Card className="h-full">
             <CardHeader>
               <div className="flex justify-between items-center">

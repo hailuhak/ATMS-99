@@ -150,13 +150,6 @@ export const FeedbackForm: React.FC = () => {
     });
   }, [availableTrainers, feedbacks, searchTerm, hiddenMessageIds]);
 
-  // Default selection
-  useEffect(() => {
-    if (!selectedTrainerId && sortedTrainers.length > 0) {
-      setSelectedTrainerId(sortedTrainers[0].id);
-    }
-  }, [sortedTrainers, selectedTrainerId]);
-
   const handleSend = async () => {
     if (!message.trim() || !selectedTrainerId || !traineeId) return;
     if (editingMessageId) {
@@ -216,10 +209,10 @@ export const FeedbackForm: React.FC = () => {
   const activeTrainer = availableTrainers.find(t => t.id === selectedTrainerId);
 
   return (
-    <div className="flex h-[700px] w-full bg-white dark:bg-gray-800 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden transition-all duration-300">
+    <div className="flex flex-col lg:flex-row h-[700px] w-full bg-white dark:bg-gray-800 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden transition-all duration-300">
 
       {/* Sidebar: Trainer List */}
-      <div className="w-1/3 border-r border-gray-200 dark:border-gray-700 flex flex-col bg-gray-50 dark:bg-[#0f172a]" ref={sidebarRef}>
+      <div className={`${selectedTrainerId ? 'hidden lg:flex' : 'flex'} w-full lg:w-1/3 border-r border-gray-200 dark:border-gray-700 flex-col bg-gray-50 dark:bg-[#0f172a] h-full`} ref={sidebarRef}>
         <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-transparent backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-xl text-gray-900 dark:text-gray-100 tracking-tight">Messages</h3>
@@ -292,17 +285,23 @@ export const FeedbackForm: React.FC = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-[#020617]">
+      <div className={`${!selectedTrainerId ? 'hidden lg:flex' : 'flex'} flex-1 flex flex-col bg-slate-50 dark:bg-[#020617] transition-all h-full`}>
         {selectedTrainerId ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm z-10 backdrop-blur-md bg-white/90 dark:bg-gray-800/90">
-              <div className="flex items-center gap-4">
+            <div className="p-3 sm:p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm z-10 backdrop-blur-md bg-white/90 dark:bg-gray-800/90">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <button
+                  onClick={() => setSelectedTrainerId(null)}
+                  className="lg:hidden p-2 -ml-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-500"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                </button>
                 <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-100 to-blue-50 dark:from-blue-900 dark:to-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold border-2 border-white dark:border-gray-700 shadow-sm leading-none text-lg">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-blue-100 to-blue-50 dark:from-blue-900 dark:to-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold border-2 border-white dark:border-gray-700 shadow-sm leading-none text-base sm:text-lg">
                     {activeTrainer?.displayName?.charAt(0) || "T"}
                   </div>
-  
+
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-gray-100 tracking-tight leading-none mb-1">
@@ -310,29 +309,27 @@ export const FeedbackForm: React.FC = () => {
                   </h3>
                   <div className="flex items-center gap-1.5">
                     <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded uppercase tracking-wider">Trainer</p>
-                  
-                  
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Messages Container */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
               {feedbacks
                 .filter(f => f.trainerId === selectedTrainerId && !hiddenMessageIds.includes(f.id))
                 .map((fb) => {
                   const isTrainee = fb.sender === "trainee";
                   return (
                     <div key={fb.id} className={`flex w-full group ${isTrainee ? "justify-end" : "justify-start"}`}>
-                      <div className={`relative max-w-[80%] flex items-end gap-2`}>
+                      <div className={`relative max-w-[85%] sm:max-w-[80%] flex items-end gap-2`}>
                         {!isTrainee && (
                           <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[10px] font-bold shrink-0 mb-1">
                             {activeTrainer?.displayName?.charAt(0)}
                           </div>
                         )}
                         <div>
-                          <div className={`relative p-4 rounded-3xl break-words shadow-sm transition-all duration-200 hover:shadow-md ${isTrainee
+                          <div className={`relative p-3 sm:p-4 rounded-3xl break-words shadow-sm transition-all duration-200 hover:shadow-md ${isTrainee
                             ? "bg-blue-600 text-white rounded-br-none shadow-md"
                             : "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-100 dark:border-gray-700 rounded-bl-none shadow-sm"
                             }`}>
@@ -373,8 +370,8 @@ export const FeedbackForm: React.FC = () => {
             </div>
 
             {/* Premium Input Section */}
-            <div className="p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-              <div className="flex items-end gap-3 bg-gray-50 dark:bg-slate-900/50 p-3 rounded-2xl border border-gray-200 dark:border-gray-700 focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500 transition-all shadow-inner">
+            <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+              <div className="flex items-end gap-3 bg-gray-50 dark:bg-slate-900/50 p-2 sm:p-3 rounded-2xl border border-gray-200 dark:border-gray-700 focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:border-blue-500 transition-all shadow-inner">
                 <textarea
                   ref={textareaRef}
                   value={message}
@@ -385,7 +382,7 @@ export const FeedbackForm: React.FC = () => {
                       handleSend();
                     }
                   }}
-                  placeholder="Share your thoughts with the trainer..."
+                  placeholder="Share your thoughts..."
                   className="flex-1 bg-transparent border-none resize-none max-h-40 min-h-[24px] focus:ring-0 p-2 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 leading-relaxed custom-scrollbar outline-none"
                   rows={1}
                   style={{ height: 'auto', minHeight: '40px' }}
@@ -393,15 +390,15 @@ export const FeedbackForm: React.FC = () => {
                 <Button
                   onClick={handleSend}
                   disabled={!message.trim()}
-                  className={`p-3 rounded-xl transition-all shadow-lg shadow-blue-500/20 active:scale-95 ${message.trim() ? "bg-gradient-to-tr from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-400 grayscale"}`}
+                  className={`p-3 rounded-xl transition-all shadow-lg active:scale-95 ${message.trim() ? "bg-gradient-to-tr from-blue-600 to-blue-500 shadow-blue-500/20 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-400 grayscale"}`}
                 >
-                  {editingMessageId ? <span className="text-xs font-bold px-3">SAVE CHANGES</span> : (
-                    <Send className="w-6 h-6 rotate-45" />
+                  {editingMessageId ? <span className="text-xs font-bold px-2">SAVE</span> : (
+                    <Send className="w-5 h-5 sm:w-6 sm:h-6 rotate-45" />
                   )}
                 </Button>
               </div>
-              <div className="flex justify-between items-center mt-3 px-1">
-                <span className="text-[10px] text-gray-400 font-medium tracking-tight">Shift + Enter for new line</span>
+              <div className="flex justify-between items-center mt-3 px-1 sm:px-2">
+                <span className="hidden sm:inline text-[10px] text-gray-400 font-medium tracking-tight">Shift + Enter for new line</span>
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded">Secure Feedbacks</span>
               </div>
             </div>

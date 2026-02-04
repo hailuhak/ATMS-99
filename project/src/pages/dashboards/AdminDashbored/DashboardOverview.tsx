@@ -162,22 +162,22 @@ export const DashboardOverview: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Home Page</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Manage your audit training system</p>
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">Home Page</h1>
+          <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-1">Manage your audit training system</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <StatsCard title="Total Users" value={usersCount.toString()} icon={Users} color="blue" />
         <StatsCard title="Total Courses" value={courses.length.toString()} icon={BookOpen} color="green" />
         <StatsCard title="Completion Rate" value={`${completionRate}%`} icon={TrendingUp} color="yellow" />
         <StatsCard title="Monthly Course" value={monthlySessions.toString()} icon={Activity} color="purple" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className={showAllCourses ? "lg:col-span-3" : "lg:col-span-2"}>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className={showAllCourses ? "xl:col-span-3" : "xl:col-span-2"}>
           <Card className="h-full">
             <CardHeader>
               <div className="flex justify-between items-center">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen,
@@ -8,7 +8,6 @@ import {
   FileText,
   UserCheck,
   GraduationCap,
-  Monitor,
   Menu,
   X,
   House,
@@ -25,19 +24,17 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange }) => {
   const { currentUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-  const [navbarHeight, setNavbarHeight] = useState(64); // default navbar height
-  const navbarRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Update on resize
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    const handleResize = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (!mobile) setIsOpen(false);
+    };
+    handleResize();
     window.addEventListener('resize', handleResize);
-
-    if (navbarRef.current) {
-      setNavbarHeight(navbarRef.current.offsetHeight);
-    }
-
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -64,94 +61,99 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
 
     { id: 'courses', label: 'Browse Courses', icon: BookOpen, roles: ['pending'] },
     { id: 'profile', label: 'Profile', icon: Users, roles: ['pending'] },
-
   ];
 
   const role = currentUser?.role || 'pending';
   const menuItems = allMenuItems.filter(item => !item.roles || item.roles.includes(role));
 
   return (
-    <div className="flex">
-      {/* Navbar placeholder */}
-      <div ref={navbarRef} className="hidden lg:block h-16 w-full" />
-
-      {/* Fixed Sidebar */}
-      <AnimatePresence>
-        {(isOpen || !isMobile) && (
-          <motion.aside
-            className="fixed top-0 left-0 z-20 w-48 bg-white dark:bg-gray-800 shadow-sm border-r border-gray-200 dark:border-gray-700 min-h-screen flex flex-col"
-            style={{ paddingTop: navbarHeight }}
-            initial={{ x: isMobile ? -300 : 0 }}
-            animate={{ x: 0 }}
-            exit={{ x: isMobile ? -300 : 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          >
-            {isMobile && (
-              <div className="flex justify-end mb-4">
-                <button onClick={() => setIsOpen(false)} className="text-gray-700 dark:text-gray-200">
-                  <X size={24} />
-                </button>
-              </div>
-            )}
-
-            <nav className="flex-1 space-y-2 overflow-y-auto">
-              {menuItems.map(item => (
-                <motion.button
-                  key={item.id}
-                  onClick={() => {
-                    onSectionChange(item.id);
-                    if (isMobile) setIsOpen(false);
-                  }}
-                  className={clsx(
-                    'w-full flex items-center px-3 py-2 rounded-lg text-left transition-colors',
-                    activeSection === item.id
-                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                      : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700'
-                  )}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <item.icon className="w-5 h-5 mr-2" />
-                  {(!isMobile || isOpen) && <span>{item.label}</span>}
-                </motion.button>
-              ))}
-            </nav>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* Main Content */}
-      <main
-        className={clsx(
-          'flex-1 min-h-screen p-6 bg-gray-50 dark:bg-gray-900 transition-all',
-          !isMobile && 'ml-40'
-        )}
-      >
-        {/* Scrollable content */}
-      </main>
-
+    <>
       {/* Mobile Hamburger Button */}
       {isMobile && (
-        <div
-          className="fixed left-4 z-40" // higher than sidebar (z-20) and overlay (z-10)
-          style={{ top: navbarHeight + 8 }} // 8px gap below navbar
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed left-4 top-20 z-30 p-2 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200"
         >
-          <button
-            onClick={() => setIsOpen(true)}
-            className="text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 p-2 rounded shadow"
-          >
-            <Menu size={24} />
-          </button>
-        </div>
+          <Menu size={20} />
+        </button>
       )}
 
-      {/* Mobile overlay */}
-      {isOpen && isMobile && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-10"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-    </div>
+      {/* Sidebar container */}
+      <AnimatePresence>
+        {(isOpen || !isMobile) && (
+          <>
+            {/* Mobile overlay */}
+            {isMobile && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsOpen(false)}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+              />
+            )}
+
+            <motion.aside
+              initial={{ x: isMobile ? -300 : 0 }}
+              animate={{ x: 0 }}
+              exit={{ x: isMobile ? -300 : 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className={clsx(
+                "fixed left-0 top-16 bottom-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-colors duration-300",
+                isMobile && "shadow-2xl"
+              )}
+            >
+              {isMobile && (
+                <div className="p-4 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
+                  <span className="font-bold text-blue-600 dark:text-blue-400">Navigation</span>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              )}
+
+              <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
+                {menuItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      onSectionChange(item.id);
+                      if (isMobile) setIsOpen(false);
+                    }}
+                    className={clsx(
+                      'w-full flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group relative',
+                      activeSection === item.id
+                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700/50 hover:text-blue-600 dark:hover:text-blue-400'
+                    )}
+                  >
+                    <item.icon className={clsx(
+                      "w-5 h-5 mr-3 transition-transform duration-200 group-hover:scale-110",
+                      activeSection === item.id ? "text-blue-600 dark:text-blue-400" : "text-gray-400 group-hover:text-blue-500"
+                    )} />
+                    <span>{item.label}</span>
+                    {activeSection === item.id && (
+                      <motion.div
+                        layoutId="activeTab"
+                        className="absolute left-0 w-1 h-6 bg-blue-600 dark:bg-blue-400 rounded-r-full"
+                      />
+                    )}
+                  </button>
+                ))}
+              </nav>
+
+              <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                <div className="px-4 py-2 bg-blue-600/10 rounded-lg text-blue-600 dark:text-blue-400 text-xs font-semibold text-center">
+                  v3.0.1 Stable
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 };

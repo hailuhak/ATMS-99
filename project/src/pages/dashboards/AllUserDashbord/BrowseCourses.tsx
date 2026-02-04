@@ -95,38 +95,35 @@ export const BrowseCourses: React.FC<BrowseCoursesProps> = ({ currentUser }) => 
         </p>
       </div>
 
-      {/* Search & Filters */}
-      <Card className="shadow-md border border-gray-200 dark:border-gray-700 rounded-2xl">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4 w-full">
-            {/* Search Bar (fills left space) */}
+      <Card className="shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-200 dark:border-gray-700 rounded-3xl overflow-hidden">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 w-full">
+            {/* Search Bar */}
             <div className="flex-1">
               <Input
-                placeholder="Search courses..."
+                placeholder="Search for courses, trainers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full"
+                className="w-full h-12 rounded-2xl border-gray-200 focus:ring-blue-500 shadow-sm"
               />
             </div>
 
-            {/* Filters aligned right */}
-            <div className="flex gap-2">
-              {/* Category Filter */}
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-2 border rounded-lg dark:bg-gray-700 dark:text-white"
+                className="h-12 px-4 border border-gray-200 rounded-2xl dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all cursor-pointer shadow-sm font-medium"
               >
                 {categories.map((cat) => (
                   <option key={cat}>{cat}</option>
                 ))}
               </select>
 
-              {/* Level Filter */}
               <select
                 value={selectedLevel}
                 onChange={(e) => setSelectedLevel(e.target.value)}
-                className="px-3 py-2 border rounded-lg dark:bg-gray-700 dark:text-white"
+                className="h-12 px-4 border border-gray-200 rounded-2xl dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all cursor-pointer shadow-sm font-medium"
               >
                 {levels.map((lvl) => (
                   <option key={lvl}>{lvl}</option>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, User, LogOut, Settings, Sun, Moon, Menu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -24,7 +24,7 @@ export const Navbar: React.FC = () => {
 
   // Fetch pending users
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'admin') return; // Only run if user is admin
+    if (!currentUser || currentUser.role !== 'admin') return;
     const q = query(collection(db, 'pendingUsers'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, snapshot => setPendingUsers(snapshot.size));
     return () => unsubscribe();
@@ -32,7 +32,7 @@ export const Navbar: React.FC = () => {
 
   // Fetch trainer notifications
   useEffect(() => {
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'trainer')) return; // Only run if user is admin or trainer
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'trainer')) return;
     const unsubscribeGrades = onSnapshot(collection(db, 'grades'), gradesSnapshot => {
       const unsubscribeFinal = onSnapshot(collection(db, 'finalGrade'), finalSnapshot => {
         const gradesByTrainee: { [key: string]: any } = {};
@@ -86,7 +86,6 @@ export const Navbar: React.FC = () => {
 
     try {
       setUploading(true);
-
       const img = new Image();
       img.src = URL.createObjectURL(file);
       await new Promise(resolve => (img.onload = resolve));
@@ -113,7 +112,6 @@ export const Navbar: React.FC = () => {
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
 
-      // Compress to under 1 MB
       let quality = 0.8;
       let base64String = canvas.toDataURL('image/jpeg', quality);
       while (base64String.length > 950000 && quality > 0.1) {
@@ -160,174 +158,177 @@ export const Navbar: React.FC = () => {
   return (
     <>
       <motion.nav
-        className="fixed top-0 left-0 w-full z-50 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700"
+        className="fixed top-0 left-0 w-full z-50 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-sm border-b border-gray-200 dark:border-gray-700"
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.3 }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <motion.h1
-              whileHover={{ scale: 1.1 }}
-              transition={{ type: 'spring', stiffness: 300 }}
-              className="text-2xl font-bold text-blue-600 dark:text-blue-400 cursor-pointer transition-colors duration-300 hover:text-blue-700 dark:hover:text-blue-300"
-            >
-              ATMS
-            </motion.h1>
-
-            {/* Desktop Menu */}
-            <div className="hidden lg:flex items-center space-x-4">
-              <motion.div whileHover={{ scale: 1.15 }}>
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200" onClick={() => setSettingsOpen(!settingsOpen)}>
-                  <Settings className="w-4 h-4 hover:text-blue-500 transition-colors duration-200" />
-                </Button>
-              </motion.div>
-
-              <motion.div whileHover={{ scale: 1.15 }}>
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
-                  <div className="relative">
-                    <Bell className="w-5 h-5 hover:text-blue-500 transition-colors duration-200" />
-                    {pendingUsers > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
-                        {pendingUsers}
-                      </span>
-                    )}
-                    {gradeCount > 0 && (
-                      <span className="absolute -bottom-1 -right-1 bg-green-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
-                        {gradeCount}
-                      </span>
-                    )}
-                  </div>
-                </Button>
-              </motion.div>
-
-              <motion.div whileHover={{ rotate: 20 }} transition={{ type: 'spring', stiffness: 200 }}>
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200" onClick={toggleTheme}>
-                  {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                </Button>
-              </motion.div>
-
-              {/* Profile Section */}
-              <div className="flex items-center space-x-3">
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{currentUser?.displayName || currentUser?.email}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{currentUser?.role}</p>
-                </div>
-                <motion.div whileHover={{ scale: 1.15 }}>
-                  <label htmlFor="profile-upload" className="cursor-pointer transition-transform duration-300">
-                    {profileImage ? (
-                      <img src={profileImage} alt="Profile" className="w-8 h-8 rounded-full object-cover border-2 border-blue-500 hover:shadow-lg hover:shadow-blue-400/40 transition-shadow duration-300" />
-                    ) : (
-                      <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors duration-300">
-                        <User className="w-4 h-4 text-white" />
-                      </div>
-                    )}
-                  </label>
-                  <input id="profile-upload" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
-                  {uploading && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-full">
-                      <span className="text-xs text-white">...</span>
-                    </div>
-                  )}
-                </motion.div>
-              </div>
-
-              <motion.div whileHover={{ scale: 1.15 }}>
-                <Button variant="ghost" size="sm" className="hover:bg-red-50 dark:hover:bg-red-900 transition-all duration-200" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 hover:text-red-500 transition-colors duration-200" />
-                </Button>
-              </motion.div>
+            {/* Left side: Logo */}
+            <div className="flex items-center">
+              <motion.h1
+                whileHover={{ scale: 1.05 }}
+                className="text-xl sm:text-2xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent cursor-pointer"
+              >
+                ATMS
+              </motion.h1>
             </div>
 
-            {/* Mobile Menu */}
-            <div className="lg:hidden flex items-center space-x-2">
-              <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-                <Menu className="w-5 h-5 hover:text-blue-500 transition-colors duration-200" />
-              </Button>
-              <div className="relative">
-                <label htmlFor="profile-upload-mobile" className="cursor-pointer hover:scale-110 transition-transform duration-300">
+            {/* Right side cluster: Hamburger, Tools, Profile, Logout */}
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              {/* 1. Hamburger (Mobile Only) */}
+              <div className="lg:hidden">
+                <Button variant="ghost" size="sm" className="rounded-full h-8 w-8 sm:h-10 sm:w-10 p-0 flex items-center justify-center" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+                  <Menu className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 dark:text-gray-300" />
+                </Button>
+              </div>
+
+              {/* Desktop Additional Tools (Settings, Bell, Theme) */}
+              <div className="hidden lg:flex items-center space-x-1 sm:space-x-2">
+                <Button variant="ghost" size="sm" className="relative hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full h-10 w-10 flex items-center justify-center p-0" onClick={() => setSettingsOpen(!settingsOpen)}>
+                  <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                </Button>
+
+                <Button variant="ghost" size="sm" className="relative hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full h-10 w-10 flex items-center justify-center p-0">
+                  <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                  {(pendingUsers > 0 || gradeCount > 0) && (
+                    <span className="absolute top-2 right-2 bg-red-500 w-2 h-2 rounded-full border-2 border-white dark:border-gray-800"></span>
+                  )}
+                </Button>
+
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full h-10 w-10 flex items-center justify-center p-0" onClick={toggleTheme}>
+                  {theme === 'light' ? <Moon className="w-5 h-5 text-gray-600" /> : <Sun className="w-5 h-5 text-yellow-400" />}
+                </Button>
+
+                <div className="h-8 w-[1px] bg-gray-200 dark:bg-gray-700 mx-1" />
+              </div>
+
+              {/* 2. Profile Image (All Devices) */}
+              <div className="relative group shrink-0">
+                <label htmlFor="profile-upload-nav" className="cursor-pointer block transition-transform active:scale-95">
                   {profileImage ? (
-                    <img src={profileImage} alt="Profile" className="w-8 h-8 rounded-full object-cover border-2 border-blue-500" />
+                    <img src={profileImage} alt="Profile" className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover ring-2 ring-blue-500/20 hover:ring-blue-500/40 transition-all" />
                   ) : (
-                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors duration-300">
-                      <User className="w-4 h-4 text-white" />
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
+                      <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    </div>
+                  )}
+                  {uploading && (
+                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
                     </div>
                   )}
                 </label>
-                <input id="profile-upload-mobile" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                <input id="profile-upload-nav" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 hover:text-red-500 transition-colors duration-200" />
+
+              {/* 3. Logout (All Devices) */}
+              <Button variant="ghost" size="sm" className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-full h-8 w-8 sm:h-10 sm:w-10 p-0 flex items-center justify-center" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
             </div>
           </div>
         </div>
 
         {/* Settings Dropdown */}
-        {settingsOpen && (
-          <div className="absolute right-4 top-16 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg rounded-lg p-4 z-50">
-            <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Your Info</h3>
-            {loadingInfo ? (
-              <p className="text-gray-500 dark:text-gray-400">Loading...</p>
-            ) : (
-              <>
-                <div className="mb-2">
-                  <label className="block text-sm text-gray-700 dark:text-gray-300">Display Name</label>
-                  <input
-                    type="text"
-                    value={userInfo.displayName}
-                    onChange={e => setUserInfo({ ...userInfo, displayName: e.target.value })}
-                    className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200"
-                  />
+        <AnimatePresence>
+          {settingsOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="absolute right-4 top-16 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl p-6 z-50"
+            >
+              <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Profile Settings</h3>
+              {loadingInfo ? (
+                <div className="py-8 text-center text-gray-500">Loading profile...</div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Display Name</label>
+                    <input
+                      type="text"
+                      value={userInfo.displayName}
+                      onChange={e => setUserInfo({ ...userInfo, displayName: e.target.value })}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={userInfo.email}
+                      onChange={e => setUserInfo({ ...userInfo, email: e.target.value })}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                  </div>
+                  <Button variant="primary" size="sm" onClick={handleUpdateInfo} className="w-full py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20">
+                    Save Changes
+                  </Button>
                 </div>
-                <div className="mb-2">
-                  <label className="block text-sm text-gray-700 dark:text-gray-300">Email</label>
-                  <input
-                    type="email"
-                    value={userInfo.email}
-                    onChange={e => setUserInfo({ ...userInfo, email: e.target.value })}
-                    className="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200"
-                  />
-                </div>
-                <Button variant="primary" size="sm" onClick={handleUpdateInfo} className="w-full mt-2">
-                  Update Info
-                </Button>
-              </>
-            )}
-          </div>
-        )}
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Mobile Dropdown */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-md">
-            <div className="flex flex-col p-4 space-y-2">
-              <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(!settingsOpen)}>
-                <Settings className="w-4 h-4 mr-2" /> Settings
-              </Button>
-              <Button variant="ghost" size="sm">
-                <div className="relative flex items-center">
-                  <Bell className="w-4 h-4 mr-2" /> Notifications
-                  {pendingUsers > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
-                      {pendingUsers}
-                    </span>
+        {/* Mobile menu dropdown */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="lg:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 overflow-hidden shadow-xl"
+            >
+              <div className="p-4 space-y-4">
+                <div className="flex items-center space-x-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
+                  {profileImage ? (
+                    <img src={profileImage} alt="Profile" className="w-12 h-12 rounded-full object-cover border-2 border-blue-500" />
+                  ) : (
+                    <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-white" />
+                    </div>
                   )}
-                  {gradeCount > 0 && (
-                    <span className="absolute -bottom-1 -right-2 bg-green-500 text-white text-xs w-4 h-4 flex items-center justify-center rounded-full">
-                      {gradeCount}
-                    </span>
-                  )}
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white">{currentUser?.displayName || "User"}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">{currentUser?.role}</p>
+                  </div>
                 </div>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={toggleTheme}>
-                {theme === 'light' ? <Moon className="w-4 h-4 mr-2" /> : <Sun className="w-4 h-4 mr-2" />} Theme
-              </Button>
-            </div>
-          </div>
-        )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center justify-center bg-gray-50 dark:bg-gray-700 rounded-xl py-3"
+                    onClick={() => { setSettingsOpen(!settingsOpen); setMobileMenuOpen(false); }}
+                  >
+                    <Settings className="w-4 h-4 mr-2 text-blue-500" /> Settings
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center justify-center bg-gray-50 dark:bg-gray-700 rounded-xl py-3"
+                    onClick={toggleTheme}
+                  >
+                    {theme === 'light' ? <Moon className="w-4 h-4 mr-2 text-indigo-500" /> : <Sun className="w-4 h-4 mr-2 text-yellow-500" />} Theme
+                  </Button>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full flex items-center justify-center py-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-4 h-4 mr-2" /> Logout
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.nav>
       <div className="h-16" />
     </>
   );
-};  
+};

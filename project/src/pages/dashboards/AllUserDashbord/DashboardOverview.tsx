@@ -61,21 +61,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
     <div className="space-y-6">
       {/* Welcome Header */}
       <motion.div
-        className="bg-gradient-to-r from-blue-600 to-emerald-600 rounded-2xl p-8 text-white"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-blue-500/20"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <h1 className="text-3xl font-bold mb-2">
+        <h1 className="text-2xl sm:text-4xl font-black mb-3 tracking-tight">
           Welcome, {currentUser?.displayName?.split(" ")[0] || "User"}!
         </h1>
-        <p className="text-blue-100 text-lg">
-          Discover audit training courses to advance your career
+        <p className="text-blue-100 text-sm sm:text-xl font-medium opacity-90 max-w-2xl">
+          Discover audit training courses to advance your career and master new skills.
         </p>
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         <StatsCard
           title="All Courses"
           value={courses.length.toString()}
@@ -86,7 +86,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
         <StatsCard
           title="Expert Trainers"
           value={trainersCount.toString()}
-
           changeType="neutral"
           icon={Users}
           color="green"
@@ -101,27 +100,33 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
       </div>
 
       {/* Featured Courses */}
-      <Card>
-        <CardHeader className="flex justify-between items-center">
-          <h3 className="text-2xl font-semibold text-gray-900 dark:text-white">
+      <Card className="rounded-3xl border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 gap-4 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
             Featured Courses
           </h3>
-          {courses.length > 3 && (
-            <Button variant="outline" onClick={() => setShowAll(!showAll)}>
+          {courses.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setShowAll(!showAll)}
+              className="w-full sm:w-auto rounded-xl font-bold border-2"
+            >
               {showAll ? "Show Less" : "View All Courses"}
             </Button>
           )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           {loading ? (
-            <p>Loading courses...</p>
+            <p className="text-center py-10 text-gray-500">Loading courses...</p>
+          ) : courses.length === 0 ? (
+            <p className="text-center py-10 text-gray-500">No courses available at the moment.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {visibleCourses.map((course) => (
                 <CourseCard
                   key={course.id}
                   course={course}
-                  showActions={isApproved} // hide enroll/view if not approved
+                  showActions={isApproved}
                   onEnroll={() => console.log("Enroll in:", course.title)}
                   onView={() => console.log("View details:", course.title)}
                 />
