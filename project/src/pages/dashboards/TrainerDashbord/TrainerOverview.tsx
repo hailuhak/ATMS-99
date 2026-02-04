@@ -11,30 +11,7 @@ import { Course } from "../../../types";
 import { db } from "../../../lib/firebase";
 import { collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 
-// ✅ Standardized safe date converter
-const safeToDate = (v: any): Date => {
-  if (!v) return new Date();
-  if (typeof v.toDate === "function") return v.toDate();
-  if (v instanceof Date) return v;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? new Date() : d;
-};
-
-// ✅ Standardized status calculation
-const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date, courseEndDate: Date) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (!trainerExists) return "draft";
-  const s = safeToDate(startDate);
-  const e = safeToDate(endDate);
-  const ce = safeToDate(courseEndDate);
-  s.setHours(0, 0, 0, 0);
-  e.setHours(0, 0, 0, 0);
-  ce.setHours(0, 0, 0, 0);
-  if (today > ce || today > e) return "completed";
-  if (today < s) return "draft";
-  return "active";
-};
+import { safeToDate, computeStatus } from "../../../lib/courseUtils";
 
 // Extend ActivityLog to include trainerId
 export interface ActivityLogExtended extends ActivityLog {
@@ -89,9 +66,8 @@ export const TrainerOverview: React.FC = () => {
     const trainerCourses = rawCourses.map(course => {
       const startDate = safeToDate(course.startDate);
       const endDate = safeToDate(course.endDate);
-      const computeStart = latestSession ? latestSession.trainStart : startDate;
       const computeEnd = latestSession ? latestSession.trainEnd : endDate;
-      const status = computeStatus(true, computeStart, computeEnd, endDate);
+      const status = computeStatus(true, computeEnd, endDate);
 
       return { ...course, startDate, endDate, status } as Course;
     });

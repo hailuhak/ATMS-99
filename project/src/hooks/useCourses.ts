@@ -7,10 +7,12 @@ import {
   updateDoc,
   onSnapshot,
   query,
-  where,
+  orderBy,
+  limit,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { User, Course } from "../types";
+import { safeToDate, computeStatus } from "../lib/courseUtils";
 
 export interface EnrollmentCourse {
   courseId: string;
@@ -37,22 +39,53 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
   const [enrollments, setEnrollments] = useState<Enrollment | null>(null);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [latestSession, setLatestSession] = useState<any>(null);
 
-  // Fetch all courses (real-time)
+  // Fetch the latest session for status calculation
+  useEffect(() => {
+    const q = query(collection(db, "sessions"), orderBy("createdAt", "desc"), limit(1));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        setLatestSession(snapshot.docs[0].data());
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch all courses (real-time) and apply reactive status
   useEffect(() => {
     const colRef = collection(db, "courses");
-    const q = statusFilter ? query(colRef, where("status", "==", statusFilter)) : colRef;
+    const q = query(colRef, orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const courses = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Course[];
-      setAllCourses(courses);
+      const courses = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        const courseEndDate = safeToDate(data.endDate);
+        const sessionEndDate = latestSession ? safeToDate(latestSession.trainEnd) : courseEndDate;
+
+        const status = computeStatus(
+          !!data.instructorId,
+          sessionEndDate,
+          courseEndDate
+        );
+
+        return {
+          id: doc.id,
+          ...data,
+          status, // Reactive status override
+        } as Course;
+      });
+
+      // Apply local status filter if provided
+      const filtered = statusFilter
+        ? courses.filter(c => c.status === statusFilter)
+        : courses;
+
+      setAllCourses(filtered);
     });
 
     return () => unsubscribe();
-  }, [statusFilter]);
+  }, [statusFilter, latestSession]);
 
   // Fetch user enrollments (real-time)
   useEffect(() => {
@@ -73,13 +106,18 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
           endDate: c.endDate ? new Date(c.endDate) : undefined,
         }));
 
-        // Auto-update completed courses
-        const now = new Date();
+        // Auto-update status for enrolled courses based on reactive logic
         let needsUpdate = false;
+        const sessionEnd = latestSession ? safeToDate(latestSession.trainEnd) : null;
+
         courses = courses.map((c) => {
-          if (c.endDate && c.endDate < now && c.status === "active") {
+          const ce = safeToDate(c.endDate);
+          const e = sessionEnd || ce;
+          const status = computeStatus(!!c.instructorId, e, ce);
+
+          if (c.status !== status) {
             needsUpdate = true;
-            return { ...c, status: "completed" };
+            return { ...c, status };
           }
           return c;
         });
@@ -99,7 +137,7 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser, latestSession]);
 
   // Enroll in a course
   const enrollCourse = useCallback(
@@ -121,8 +159,8 @@ export const useCourses = (currentUser: User | null, statusFilter?: string) => {
         hours: course.hours,
         level: course.level,
         category: course.category,
-        startDate: course.startDate,
-        endDate: course.endDate,
+        startDate: safeToDate(course.startDate),
+        endDate: safeToDate(course.endDate),
         materials: course.materials || [],
         status: course.status,
       };

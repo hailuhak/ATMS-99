@@ -54,7 +54,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
     };
   }, []);
 
-  const isApproved = currentUser?.status === "approved"; // adjust to your schema
+  const isApproved = currentUser?.role && currentUser.role !== "pending";
   const visibleCourses = showAll ? courses : courses.slice(0, 3);
 
   return (
@@ -86,7 +86,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ currentUse
         <StatsCard
           title="Expert Trainers"
           value={trainersCount.toString()}
-          
+
           changeType="neutral"
           icon={Users}
           color="green"

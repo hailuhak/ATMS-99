@@ -1,17 +1,16 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { CourseCard } from "../../../components/courses/CourseCard";
 import { Input } from "../../../components/ui/Input";
-import { Button } from "../../../components/ui/Button";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { User, Course } from "../../../types";
-
+import { safeToDate, computeStatus } from "../../../lib/courseUtils";
 interface BrowseCoursesProps {
-  currentUser: User | null;
+  currentUser?: User | null;
 }
 
-export const BrowseCourses: React.FC<BrowseCoursesProps> = () => {
+export const BrowseCourses: React.FC<BrowseCoursesProps> = ({ currentUser }) => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,20 +18,37 @@ export const BrowseCourses: React.FC<BrowseCoursesProps> = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Courses");
   const [selectedLevel, setSelectedLevel] = useState("All Levels");
+  const [latestSession, setLatestSession] = useState<any>(null);
+
+  // Fetch session dates for real-time status
+  useEffect(() => {
+    const q = query(collection(db, "sessions"), orderBy("createdAt", "desc"), limit(1));
+    return onSnapshot(q, (snap) => {
+      if (!snap.empty) setLatestSession(snap.docs[0].data());
+    });
+  }, []);
 
   // Fetch courses from Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "courses"), (snapshot) => {
-      const fetchedCourses = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Course[];
+      const fetchedCourses = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        const courseEndDate = safeToDate(data.endDate);
+        const sessionEndDate = latestSession ? safeToDate(latestSession.trainEnd) : courseEndDate;
+        const status = computeStatus(!!data.instructorId, sessionEndDate, courseEndDate);
+
+        return {
+          id: doc.id,
+          ...data,
+          status, // Reactive override
+        } as Course;
+      });
       setCourses(fetchedCourses);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [latestSession]);
 
   // Extract unique categories & levels
   const categories = useMemo(() => {
@@ -49,14 +65,12 @@ export const BrowseCourses: React.FC<BrowseCoursesProps> = () => {
   const filteredCourses = useMemo(() => {
     return courses.filter((course) => {
       const title = course.title?.toLowerCase() || "";
-      const description = course.description?.toLowerCase() || "";
       const instructor = course.instructorName?.toLowerCase() || "";
-      const query = searchTerm.toLowerCase();
+      const queryStr = searchTerm.toLowerCase();
 
       const matchesSearch =
-        title.includes(query) ||
-        description.includes(query) ||
-        instructor.includes(query);
+        title.includes(queryStr) ||
+        instructor.includes(queryStr);
 
       const matchesCategory =
         selectedCategory === "All Courses" ||

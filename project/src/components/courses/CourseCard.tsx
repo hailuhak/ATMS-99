@@ -92,7 +92,7 @@ export const CourseCard: React.FC<CourseCardProps> = ({
       transition={{ duration: 0.3 }}
     >
       <Card
-        className={`group relative hover:shadow-2xl transition-all duration-500 rounded-[2rem] border border-gray-100 dark:border-gray-800 flex flex-col justify-between h-full min-h-[260px] overflow-hidden ${className}`}
+        className={`group relative hover:shadow-2xl transition-all duration-500 rounded-[2rem] border border-gray-100 dark:border-gray-800 flex flex-col h-full min-h-[260px] overflow-hidden ${className}`}
       >
         {/* Decorative Top Accent */}
         <div className={`absolute top-0 left-0 right-0 h-1.5 ${levelColor.split(' ')[0]}`} />
@@ -125,31 +125,37 @@ export const CourseCard: React.FC<CourseCardProps> = ({
         </CardHeader>
 
         {/* ===== Content ===== */}
-        <CardContent className="pb-4">
-          <div className="grid grid-cols-2 gap-y-2 gap-x-2">
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                <Clock className="w-3.5 h-3.5 text-gray-400" />
+        <CardContent className="flex-1 flex flex-col justify-center py-2">
+          <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+            <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+              <div className="p-1.5 rounded-xl bg-blue-50/50 dark:bg-blue-900/20">
+                <Clock className="w-4 h-4 text-blue-500" />
               </div>
-              <span className="text-[11px] font-semibold">{course.hours ? `${course.hours} hrs` : "N/A"}</span>
+              <span className="text-[12px] font-bold tracking-tight">{course.hours ? `${course.hours} hrs` : "N/A"}</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                <BookOpen className="w-3.5 h-3.5 text-gray-400" />
+            <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+              <div className="p-1.5 rounded-xl bg-purple-50/50 dark:bg-purple-900/20">
+                <BookOpen className="w-4 h-4 text-purple-500" />
               </div>
-              <span className="text-[11px] font-semibold truncate max-w-[70px]">{course.category || "General"}</span>
+              <span className="text-[12px] font-bold tracking-tight truncate">{course.category || "General"}</span>
             </div>
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+              <div className="p-1.5 rounded-xl bg-green-50/50 dark:bg-green-900/20">
+                <Calendar className="w-4 h-4 text-green-500" />
               </div>
-              <span className="text-[11px] font-semibold">{formatDate(course.startDate)}</span>
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-gray-400">Starts</span>
+                <span className="text-[11px] font-bold tracking-tight">{formatDate(course.startDate)}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <div className="flex items-center gap-2.5 text-gray-600 dark:text-gray-400">
+              <div className="p-1.5 rounded-xl bg-red-50/50 dark:bg-red-900/20">
+                <Calendar className="w-4 h-4 text-red-500" />
               </div>
-              <span className="text-[11px] font-semibold">{course.endDate ? formatDate(course.endDate) : "N/A"}</span>
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-gray-400">Ends</span>
+                <span className="text-[11px] font-bold tracking-tight">{course.endDate ? formatDate(course.endDate) : "N/A"}</span>
+              </div>
             </div>
           </div>
         </CardContent>

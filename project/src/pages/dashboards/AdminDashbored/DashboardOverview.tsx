@@ -8,6 +8,7 @@ import { Users, BookOpen, TrendingUp, Activity } from "lucide-react";
 import { db, auth } from "../../../lib/firebase";
 import { collection, query, orderBy, onSnapshot, Timestamp, doc, updateDoc, getDocs, serverTimestamp, addDoc } from "firebase/firestore";
 import { Course, ActivityLog } from "../../../types";
+import { safeToDate, computeStatus } from "../../../lib/courseUtils";
 
 export const DashboardOverview: React.FC = () => {
   const [usersCount, setUsersCount] = useState(0);
@@ -20,34 +21,6 @@ export const DashboardOverview: React.FC = () => {
 
   const [latestSession, setLatestSession] = useState<any>(null);
   const [rawCourses, setRawCourses] = useState<any[]>([]);
-
-  // ✅ Standardized safe date converter
-  const safeToDate = (v: any): Date => {
-    if (!v) return new Date();
-    if (typeof v.toDate === "function") return v.toDate();
-    if (v instanceof Date) return v;
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? new Date() : d;
-  };
-
-  // --- Standardized status calculation (matches CourseManagement.tsx) ---
-  const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date, courseEndDate: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (!trainerExists) return "draft";
-
-    const s = safeToDate(startDate);
-    const e = safeToDate(endDate);
-    const ce = safeToDate(courseEndDate);
-    s.setHours(0, 0, 0, 0);
-    e.setHours(0, 0, 0, 0);
-    ce.setHours(0, 0, 0, 0);
-
-    if (today > ce || today > e) return "completed";
-    if (today < s) return "draft";
-    return "active";
-  };
 
   const logActivity = async (action: string, target: string, details?: string) => {
     if (!auth.currentUser) return;
@@ -94,24 +67,15 @@ export const DashboardOverview: React.FC = () => {
           courseEndDate.setHours(0, 0, 0, 0);
 
           // Rule 1: Auto-complete if session ended OR course ended
-          if ((today > sessionEnd || today > courseEndDate) && data.status !== "completed" && data.instructorId) {
+          const status = computeStatus(!!data.instructorId, sessionEnd, courseEndDate);
+          if (data.status !== status && data.instructorId) {
             try {
               await updateDoc(doc(db, "courses", d.id), {
-                status: "completed",
+                status,
                 updatedAt: serverTimestamp(),
               });
-              await logActivity("auto-completed", `course: ${data.title}`, "End date passed.");
-            } catch (err) { console.error("Auto-completion error:", err); }
-          }
-          // Rule 2: Auto-draft if session hasn't started yet
-          else if (today < sessionStart && data.status === "active") {
-            try {
-              await updateDoc(doc(db, "courses", d.id), {
-                status: "draft",
-                updatedAt: serverTimestamp(),
-              });
-              await logActivity("auto-draft", `course: ${data.title}`, "Session hasn't started.");
-            } catch (err) { console.error("Auto-draft error:", err); }
+              await logActivity("auto-updated", `course: ${data.title}`, `Status changed to ${status}.`);
+            } catch (err) { console.error("Auto-update error:", err); }
           }
         }
       } catch (err) {
@@ -166,11 +130,10 @@ export const DashboardOverview: React.FC = () => {
       const endDate = safeToDate(data.endDate);
 
       // Real-time Override: Use Session dates if available
-      const computeStart = latestSession ? latestSession.trainStart : startDate;
       const computeEnd = latestSession ? latestSession.trainEnd : endDate;
 
       // COMPUTE STANDARDIZED STATUS (Includes course-specific endDate check)
-      const status = computeStatus(!!data.instructorId, computeStart, computeEnd, endDate);
+      const status = computeStatus(!!data.instructorId, computeEnd, endDate);
 
       return {
         id: docSnap.id,

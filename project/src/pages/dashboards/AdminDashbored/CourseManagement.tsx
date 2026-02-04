@@ -22,6 +22,7 @@ import {
   where,
   onSnapshot,
 } from "firebase/firestore";
+import { safeToDate, computeStatus } from "../../../lib/courseUtils";
 
 interface GlobalSession {
   id?: string;
@@ -39,9 +40,6 @@ interface TrainerProfile {
 }
 
 const normalize = (s?: string) => (s || "").toString().trim().toLowerCase();
-
-const safeDate = (v: any) =>
-  v && typeof v.toDate === "function" ? v.toDate() : v instanceof Date ? v : new Date(v);
 
 const defaultCourseData: Omit<Course, "id" | "createdAt" | "updatedAt"> = {
   title: "",
@@ -111,11 +109,11 @@ export const CourseManagement: React.FC = () => {
         return {
           id: d.id,
           title: data.title,
-          regStart: safeDate(data.regStart),
-          regEnd: safeDate(data.regEnd),
-          trainStart: safeDate(data.trainStart),
-          trainEnd: safeDate(data.trainEnd),
-          createdAt: safeDate(data.createdAt),
+          regStart: safeToDate(data.regStart),
+          regEnd: safeToDate(data.regEnd),
+          trainStart: safeToDate(data.trainStart),
+          trainEnd: safeToDate(data.trainEnd),
+          createdAt: safeToDate(data.createdAt),
         } as GlobalSession;
       });
       setSessions(loaded);
@@ -147,22 +145,21 @@ export const CourseManagement: React.FC = () => {
     const latestSession = sessions[0];
 
     const formatted = coursesFromDB.map((course) => {
-      const startDate = safeDate((course as any).startDate);
-      const endDate = safeDate((course as any).endDate);
+      const startDate = safeToDate((course as any).startDate);
+      const endDate = safeToDate((course as any).endDate);
 
       // Priority Logic: Use Session dates if available for real-time status calculation
-      const computeStart = latestSession ? latestSession.trainStart : startDate;
       const computeEnd = latestSession ? latestSession.trainEnd : endDate;
 
       // COMPUTE STANDARDIZED STATUS (Includes course-specific endDate check)
-      const status = computeStatus(!!course.instructorId, computeStart, computeEnd, endDate);
+      const status = computeStatus(!!course.instructorId, computeEnd, endDate);
 
       return {
         ...course,
         startDate,
         endDate,
-        createdAt: safeDate((course as any).createdAt),
-        updatedAt: safeDate((course as any).updatedAt),
+        createdAt: safeToDate((course as any).createdAt),
+        updatedAt: safeToDate((course as any).updatedAt),
         materials: course.materials || [],
         status,
       } as Course;
@@ -205,22 +202,6 @@ export const CourseManagement: React.FC = () => {
     return true;
   };
 
-  const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date, courseEndDate: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (!trainerExists) return "draft";
-    const s = new Date(startDate);
-    const e = new Date(endDate);
-    const ce = new Date(courseEndDate);
-    s.setHours(0, 0, 0, 0);
-    e.setHours(0, 0, 0, 0);
-    ce.setHours(0, 0, 0, 0);
-
-    if (today > ce || today > e) return "completed";
-    if (today < s) return "draft";
-    return "active";
-  };
-
   /* -------------------------
      Activity logging
   ------------------------- */
@@ -256,7 +237,6 @@ export const CourseManagement: React.FC = () => {
     try {
       const status = computeStatus(
         !!newCourse.instructorId,
-        new Date(newCourse.startDate as any),
         new Date(newCourse.endDate as any),
         new Date(newCourse.endDate as any)
       );
@@ -294,7 +274,6 @@ export const CourseManagement: React.FC = () => {
     try {
       const status = computeStatus(
         !!editingCourse.instructorId,
-        new Date(editingCourse.startDate as any),
         new Date(editingCourse.endDate as any),
         new Date(editingCourse.endDate as any)
       );
@@ -350,27 +329,20 @@ export const CourseManagement: React.FC = () => {
       today.setHours(0, 0, 0, 0);
 
       for (const course of courses) {
-        const ce = safeDate(course.endDate);
+        const ce = safeToDate(course.endDate);
         ce.setHours(0, 0, 0, 0);
 
         // 1. Completion logic (Session End OR Course End)
-        if ((today > latestSession.trainEnd || today > ce) && course.status !== "completed" && course.instructorId) {
+        const computeEnd = latestSession.trainEnd;
+        const status = computeStatus(!!course.instructorId, computeEnd, ce);
+
+        if (course.status !== status && course.instructorId) {
           try {
             await updateDoc(doc(db, "courses", course.id), {
-              status: "completed",
+              status,
               updatedAt: serverTimestamp()
             });
-            await logActivity("auto-completed", `course: ${course.title}`, `End date passed.`);
-          } catch (err) { console.error(err); }
-        }
-        // 2. Draft logic (Session Start)
-        else if (today < latestSession.trainStart && course.status === "active") {
-          try {
-            await updateDoc(doc(db, "courses", course.id), {
-              status: "draft",
-              updatedAt: serverTimestamp()
-            });
-            await logActivity("auto-updated", `course: ${course.title}`, `Session hasn't started yet.`);
+            await logActivity("auto-updated", `course: ${course.title}`, `Status changed to ${status}.`);
           } catch (err) { console.error(err); }
         }
       }

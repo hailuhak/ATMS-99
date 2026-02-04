@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
+import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
@@ -8,7 +8,7 @@ import {
   signInWithPopup,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { User } from '../types';
 import { FieldValue } from 'firebase/firestore';
@@ -26,7 +26,7 @@ interface AuthContextType {
     displayName: string,
     selectedRole: 'user' | 'trainer' | 'trainee'
   ) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (isLoginMode?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
   approveUser?: (userId: string) => Promise<void>;
@@ -106,42 +106,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // --- Login with Google ---
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = async (isLoginMode: boolean = true) => {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
+    const user = result.user;
 
-    const userRef = doc(db, 'users', result.user.uid);
+    const userRef = doc(db, 'users', user.uid);
     const userDoc = await getDoc(userRef);
 
+    if (isLoginMode) {
+      if (!userDoc.exists()) {
+        const pendingRef = doc(db, 'pendingUsers', user.uid);
+        const pendingDoc = await getDoc(pendingRef);
+
+        if (pendingDoc.exists()) {
+          // Found in pendingUsers but not users (shouldn't happen with latest logic, but good for healing)
+          const pendingData = pendingDoc.data();
+          const userData: UserWithTimestamp = {
+            uid: user.uid,
+            email: user.email || '',
+            displayName: pendingData.displayName || user.displayName || '',
+            role: 'pending',
+            photoURL: user.photoURL || '',
+            createdAt: pendingData.createdAt || new Date(),
+            lastLogin: new Date(),
+            timestamp: serverTimestamp(),
+          };
+          await setDoc(userRef, userData);
+          setCurrentUser(userData);
+          return;
+        }
+
+        // Truly not registered
+        await signOut(auth);
+        throw new Error('This account is not registered. Please sign up first.');
+      }
+
+      // Exists in users - normal login
+      const userData = userDoc.data() as UserWithTimestamp;
+      await setDoc(userRef, { ...userData, lastLogin: new Date() }, { merge: true });
+      setCurrentUser(userData);
+      return;
+    }
+
+    // --- Signup Mode ---
     if (!userDoc.exists()) {
       const newUser: UserWithTimestamp = {
-        uid: result.user.uid,
-        email: result.user.email || '',
-        displayName: result.user.displayName || '',
+        uid: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || '',
         role: 'pending',
-        photoURL: result.user.photoURL || '',
+        photoURL: user.photoURL || '',
         createdAt: new Date(),
         lastLogin: new Date(),
         timestamp: serverTimestamp(),
       };
       await setDoc(userRef, newUser);
 
-      await setDoc(doc(db, 'pendingUsers', result.user.uid), {
-        uid: result.user.uid,
-        email: result.user.email || '',
-        displayName: result.user.displayName || '',
+      await setDoc(doc(db, 'pendingUsers', user.uid), {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || '',
         role: 'trainee',
-        photoURL: result.user.photoURL || '',
+        photoURL: user.photoURL || '',
         timestamp: serverTimestamp(),
       });
 
       setCurrentUser(newUser);
-      return;
+    } else {
+      // Already exists, just log in
+      const userData = userDoc.data() as UserWithTimestamp;
+      setCurrentUser(userData);
     }
-
-    const userData = userDoc.data() as UserWithTimestamp;
-    await setDoc(userRef, { ...userData, lastLogin: new Date() }, { merge: true });
-    setCurrentUser(userData);
   };
 
   // --- Logout ---
@@ -177,18 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (userDoc.exists()) {
           setCurrentUser(userDoc.data() as UserWithTimestamp);
         } else {
-          const newUser: UserWithTimestamp = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            displayName: firebaseUser.displayName || '',
-            role: 'pending',
-            photoURL: firebaseUser.photoURL || '',
-            createdAt: new Date(),
-            lastLogin: new Date(),
-            timestamp: serverTimestamp(),
-          };
-          await setDoc(userRef, newUser);
-          setCurrentUser(newUser);
+          setCurrentUser(null);
         }
       } else {
         setCurrentUser(null);

@@ -50,14 +50,14 @@ export const Dashboard: React.FC = () => {
           case 'pending-users':
             return <PendingUsers />;
           default:
-            return <AdminDashboard activeSection={activeSection} />;
+            return <AdminDashboard activeSection={activeSection as any} />;
         }
 
       case 'trainer':
-        return <TrainerDashboard activeSection={activeSection} />;
+        return <TrainerDashboard activeSection={activeSection as any} />;
 
       case 'trainee':
-        return <TraineeDashboard activeSection={activeSection} />;
+        return <TraineeDashboard activeSection={activeSection as any} />;
 
       default:
         return <UserDashboard activeSection={activeSection} />;
@@ -68,11 +68,11 @@ export const Dashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navbar />
       <div className="flex">
-        <Sidebar 
-          activeSection={activeSection} 
-          onSectionChange={setActiveSection} 
+        <Sidebar
+          activeSection={activeSection}
+          onSectionChange={setActiveSection}
         />
-        <motion.main 
+        <motion.main
           className="flex-1 p-6"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}

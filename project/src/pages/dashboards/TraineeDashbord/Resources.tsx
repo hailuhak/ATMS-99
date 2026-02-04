@@ -208,10 +208,10 @@ export const Resources: React.FC = () => {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-        Learning Resources & E-Learning
+        Learning Materials
       </h1>
       <p className="text-gray-600 dark:text-gray-400 mt-1">
-        Access course materials, videos, and documents from your enrolled courses
+          Access all your training resources here. 
       </p>
 
       {/* Controls: Tabs & Filter */}

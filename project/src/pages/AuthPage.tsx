@@ -4,9 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface AuthPageProps {
   onBack: () => void;
@@ -31,8 +30,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   const [canSignup, setCanSignup] = useState(false);
   const [registrationMessage, setRegistrationMessage] = useState('');
 
-
-
   const [formData, setFormData] = useState<FormData>({
     email: '',
     password: '',
@@ -41,7 +38,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
     role: 'trainee',
   });
 
-  const { login, signup } = useAuth();
+  const { login, signup, loginWithGoogle } = useAuth();
 
   // Registration session check
   useEffect(() => {
@@ -67,23 +64,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
       const day = String(today.getDate()).padStart(2, '0');
       const todayStr = `${year}-${month}-${day}`;
 
-      console.log('Checking sessions against today:', todayStr);
-
       let activeSessionFound = false;
-      let latestSession = snapshot.docs[0].data(); // Fallback for message
+      let latestSession = snapshot.docs[0].data();
 
-      // Check if any of the recent sessions are active
       for (const doc of snapshot.docs) {
         const sessionData = doc.data();
-        // Ensure regStart/regEnd exist
         if (!sessionData.regStart || !sessionData.regEnd) continue;
 
-        console.log(`Checking session: ${sessionData.title}, Start: ${sessionData.regStart}, End: ${sessionData.regEnd}`);
-
-        // Simple dictionary string comparison works for YYYY-MM-DD
         if (todayStr >= sessionData.regStart && todayStr <= sessionData.regEnd) {
           activeSessionFound = true;
-          console.log('Active session found!');
           break;
         }
       }
@@ -93,7 +82,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
         setRegistrationMessage('Active registration session. You can sign up now!');
       } else {
         setCanSignup(false);
-        // Use the latest session to determine the message
         if (todayStr < latestSession.regStart) {
           setRegistrationMessage(`Registration opens on ${latestSession.regStart}`);
         } else {
@@ -109,7 +97,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
     return () => unsubscribe();
   }, [isLogin]);
 
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const value = e.target.name === 'role' ? (e.target.value as Role) : e.target.value;
     setFormData(prev => ({ ...prev, [e.target.name]: value }));
@@ -118,34 +105,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Form submitted. isLogin:", isLogin);
     setLoading(true);
     setError('');
 
     try {
       if (isLogin) {
-        console.log("Attempting login...");
         await login(formData.email, formData.password);
       } else {
-        console.log("Attempting signup...");
         if (formData.password !== formData.confirmPassword) throw new Error('Passwords do not match');
         if (formData.password.length < 6) throw new Error('Password must be at least 6 characters long');
 
-
-        // Fix role type issue by casting or ensuring valid value (admin is not allowed for signup)
-        const validRole = formData.role as 'trainer' | 'trainee' | 'user';
-
-        console.log("Calling signup function with file...");
         await signup(
           formData.email,
           formData.password,
           formData.displayName,
-          validRole,
+          formData.role as 'trainer' | 'trainee' | 'user'
         );
-        console.log("Signup completed successfully");
       }
     } catch (err: any) {
-      console.error("Signup error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -157,83 +134,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
     setError('');
 
     try {
-      // If signup is closed, show the registration message and stop
       if (!isLogin && !canSignup) {
         setRegistrationMessage(registrationMessage || 'Registration is not currently available.');
         setLoading(false);
         return;
       }
 
-      const provider = new GoogleAuthProvider();
-      const userCredential = await signInWithPopup(auth, provider);
-      const user = userCredential.user;
-
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-
-      // ================= LOGIN MODE =================
-      if (isLogin) {
-        if (!userSnap.exists()) {
-          // Check if user is in pendingUsers (awaiting approval)
-          const pendingRef = doc(db, 'pendingUsers', user.uid);
-          const pendingSnap = await getDoc(pendingRef);
-
-          if (pendingSnap.exists()) {
-            setError('Your account is still pending approval. Waiting for admin.');
-            return;
-          }
-
-          setError('This account is not registered.');
-          await auth.signOut();
-          return;
-        }
-
-        // User exists in users collection (approved) - allow login
-        return;
-      }
-
-      // ================= SIGNUP MODE =================
-      if (!userSnap.exists()) {
-        // Check if user exists in pendingUsers (already signed up, waiting approval)
-        const pendingRef = doc(db, 'pendingUsers', user.uid);
-        const pendingSnap = await getDoc(pendingRef);
-
-        if (pendingSnap.exists()) {
-          // User already signed up and is pending approval
-          setError('Your account is pending approval. Please wait for admin approval.');
-          return;
-        }
-
-        // New signup: create ONLY in pendingUsers (not in users until approved)
-        await setDoc(pendingRef, {
-          uid: user.uid,
-          displayName: user.displayName || '',
-          email: user.email,
-          role: 'trainee', // default role for admin approval
-          photoURL: user.photoURL || '',
-          createdAt: new Date(),
-          timestamp: serverTimestamp(),
-        });
-
-        setError('Your account is pending approval. Please wait for admin approval.');
-        return;
-      }
-
-      // If user exists already
-      const userData = userSnap.data();
-      if (userData.role === 'pending') {
-        setError('Your account is still pending approval. Waiting for admin.');
-        return;
-      }
-
-      setError('This account already exists. Please sign in.');
+      await loginWithGoogle(isLogin);
+      // Redirect happens automatically as AuthContext updates
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
-
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-emerald-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -243,7 +157,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Back Button */}
         <motion.button
           onClick={onBack}
           className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors"
@@ -253,7 +166,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
           Back to Welcome
         </motion.button>
 
-        {/* Auth Card */}
         <motion.div
           className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-8"
           initial={{ scale: 0.95 }}
@@ -279,7 +191,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
             </motion.div>
           )}
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             {!isLogin && (
               <Input
@@ -355,7 +266,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
                     <option value="trainee">Trainee</option>
                   </select>
                 </div>
-
               </>
             )}
 
@@ -370,7 +280,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
             </Button>
           </form>
 
-          {/* Divider */}
           <div className="my-6 relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-300 dark:border-gray-600" />
@@ -382,7 +291,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
             </div>
           </div>
 
-          {/* Google Sign In */}
           <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={handleGoogleSignIn} disabled={loading}>
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.19-2.37H12v4.49h6.44c-.28 1.53-1.13 2.82-2.38 3.69v3.06h3.84c2.25-2.07 3.55-5.13 3.55-8.87z" />
@@ -393,7 +301,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
             Continue with Google
           </Button>
 
-          {/* Toggle Auth Mode */}
           <div className="mt-6 text-center">
             <button
               type="button"
@@ -417,7 +324,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
               )}
             </button>
           </div>
-
         </motion.div>
       </motion.div>
     </div>

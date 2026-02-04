@@ -29,18 +29,16 @@ const safeToDate = (v: any): Date => {
 };
 
 // ✅ Standardized status calculation
-const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date, courseEndDate: Date) => {
+const computeStatus = (trainerExists: boolean, endDate: Date, courseEndDate: Date) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   if (!trainerExists) return "draft";
-  const s = safeToDate(startDate);
   const e = safeToDate(endDate);
   const ce = safeToDate(courseEndDate);
-  s.setHours(0, 0, 0, 0);
   e.setHours(0, 0, 0, 0);
   ce.setHours(0, 0, 0, 0);
   if (today > ce || today > e) return "completed";
-  if (today < s) return "draft";
+  // Modified: removed "today < s" check for draft status.
   return "active";
 };
 
@@ -120,9 +118,8 @@ export const TrainerCourses: React.FC = () => {
         const endDate = safeToDate(data.endDate);
 
         // Compute real-time status
-        const computeStart = sessionDates ? safeToDate(sessionDates.trainStart) : startDate;
         const computeEnd = sessionDates ? safeToDate(sessionDates.trainEnd) : endDate;
-        const status = computeStatus(true, computeStart, computeEnd, endDate);
+        const status = computeStatus(true, computeEnd, endDate);
 
         return {
           id: docSnap.id,

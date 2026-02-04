@@ -7,13 +7,13 @@ import {
   collection,
   onSnapshot,
   query,
-  orderBy,
   doc,
   updateDoc,
   deleteDoc,
   getDoc,
   serverTimestamp,
   setDoc,
+  where,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -35,15 +35,38 @@ export const PendingUsers: React.FC = () => {
   const [approvalMessage, setApprovalMessage] = useState("");
   const [rejectionMessage, setRejectionMessage] = useState("");
 
-  // 🔹 Load pending users in real-time
+  // 🔹 Load pending users in real-time by querying the main users collection
   useEffect(() => {
-    const q = query(collection(db, "pendingUsers"), orderBy("timestamp", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const users = snapshot.docs.map((doc) => ({
-        uid: doc.id,
-        ...doc.data(),
-      })) as PendingUser[];
+    const q = query(collection(db, "users"), where("role", "==", "pending"));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const users: PendingUser[] = [];
+
+      for (const userDoc of snapshot.docs) {
+        const userData = userDoc.data();
+        // Try to fetch the requested role from pendingUsers collection
+        const pendingRef = doc(db, "pendingUsers", userDoc.id);
+        const pendingSnap = await getDoc(pendingRef);
+
+        users.push({
+          uid: userDoc.id,
+          displayName: userData.displayName || "N/A",
+          email: userData.email || "N/A",
+          role: pendingSnap.exists() ? pendingSnap.data().role : "trainee",
+          timestamp: userData.timestamp || userData.createdAt,
+        });
+      }
+
+      // Sort in-memory to ensure users missing timestamps aren't excluded by Firestore query
+      users.sort((a, b) => {
+        const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
+        const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
       setPendingUsers(users);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching pending users:", error);
       setLoading(false);
     });
 
