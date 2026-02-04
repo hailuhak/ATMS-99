@@ -9,10 +9,8 @@ import {
   collection,
   query,
   where,
-  getDocs,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
