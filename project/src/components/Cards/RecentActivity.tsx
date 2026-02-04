@@ -10,9 +10,9 @@ export interface ActivityLog {
   id: string;
   userName: string;
   action: string;
-  target: string;
+  target?: string;
   details?: string;
-  timestamp: Date;
+  timestamp: Date | any; // Accept Date or Firestore Timestamp
 }
 
 // ✅ Props for RecentActivity
@@ -31,7 +31,9 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({
   const [loading, setLoading] = useState(true);
 
   // ✅ Format timestamp to human-readable string
-  const formatTime = (date: Date) => {
+  const formatTime = (rawDate: any) => {
+    const date = rawDate?.toDate ? rawDate.toDate() : new Date(rawDate);
+    if (isNaN(date.getTime())) return "Unknown time";
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -41,7 +43,7 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({
     if (days > 0) return `${days}d ago`;
     if (hours > 0) return `${hours}h ago`;
     if (minutes > 0) return `${minutes}m ago`;
-    return 'Just now';
+    return "Just now";
   };
 
   // ✅ Fetch activities
@@ -49,12 +51,12 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({
     if (propLogs) {
       // Use provided logs if available
       const formattedLogs = propLogs.map((log: any) => ({
-        id: log.id || '',
-        userName: log.userName || log.user || 'Unknown User',
-        action: log.action || '',
-        target: log.target || '',
-        details: log.details || log.description || '',
-        timestamp: log.timestamp instanceof Date ? log.timestamp : new Date(log.timestamp),
+        id: log.id || "",
+        userName: log.userName || log.user || "Unknown User",
+        action: log.action || "",
+        target: log.target || "",
+        details: log.details || log.description || "",
+        timestamp: log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp),
       }));
       setActivities(formattedLogs.slice(0, limitCount));
       setLoading(propLoading ?? false);

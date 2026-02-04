@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
-import { Plus, Edit2, Trash2 } from "lucide-react";
-import { Course, ActivityLog, Session } from "../../../types";
+import { Plus } from "lucide-react";
+import { Course } from "../../../types";
+import { CourseCard } from "../../../components/courses/CourseCard";
 import { useFirestoreQuery } from "../../../hooks/useFirestoreQuery";
-import { db } from "../../../lib/firebase";
+import { db, auth } from "../../../lib/firebase";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {
@@ -18,12 +19,29 @@ import {
   orderBy,
   limit,
   query,
-  getDocs,
   where,
   onSnapshot,
 } from "firebase/firestore";
 
+interface GlobalSession {
+  id?: string;
+  title: string;
+  regStart: Date;
+  regEnd: Date;
+  trainStart: Date;
+  trainEnd: Date;
+  createdAt?: Date;
+}
+
+interface TrainerProfile {
+  id: string;
+  displayName: string;
+}
+
 const normalize = (s?: string) => (s || "").toString().trim().toLowerCase();
+
+const safeDate = (v: any) =>
+  v && typeof v.toDate === "function" ? v.toDate() : v instanceof Date ? v : new Date(v);
 
 const defaultCourseData: Omit<Course, "id" | "createdAt" | "updatedAt"> = {
   title: "",
@@ -71,7 +89,8 @@ export const CourseManagement: React.FC = () => {
   );
 
   const [courses, setCourses] = useState<Course[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<GlobalSession[]>([]);
+  const [trainers, setTrainers] = useState<TrainerProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -79,8 +98,7 @@ export const CourseManagement: React.FC = () => {
   const [newCourse, setNewCourse] = useState<Omit<Course, "id" | "createdAt" | "updatedAt">>(
     defaultCourseData
   );
-  const [newMaterial, setNewMaterial] = useState("");
-  const [loading, setLoading] = useState(false); // <-- Added loading state
+  const [loading, setLoading] = useState(false);
 
   /* -------------------------
      Sessions (real-time)
@@ -90,17 +108,15 @@ export const CourseManagement: React.FC = () => {
     const unsub = onSnapshot(q, (snap) => {
       const loaded = snap.docs.map((d) => {
         const data = d.data() as any;
-        const safeDate = (v: any) =>
-          v && typeof v.toDate === "function" ? v.toDate() : v instanceof Date ? v : new Date(v);
         return {
-          id: data.id,
+          id: d.id,
           title: data.title,
           regStart: safeDate(data.regStart),
           regEnd: safeDate(data.regEnd),
           trainStart: safeDate(data.trainStart),
           trainEnd: safeDate(data.trainEnd),
           createdAt: safeDate(data.createdAt),
-        } as Session;
+        } as GlobalSession;
       });
       setSessions(loaded);
     });
@@ -109,24 +125,50 @@ export const CourseManagement: React.FC = () => {
   }, []);
 
   /* -------------------------
+     Trainers (real-time)
+  ------------------------- */
+  useEffect(() => {
+    const q = query(collection(db, "users"), where("role", "==", "trainer"));
+    const unsub = onSnapshot(q, (snap) => {
+      const loaded = snap.docs.map((d) => ({
+        id: d.id,
+        displayName: d.data().displayName || "Unnamed Trainer",
+      }));
+      setTrainers(loaded);
+    });
+    return () => unsub();
+  }, []);
+
+  /* -------------------------
      Normalize courses
   ------------------------- */
   useEffect(() => {
     if (!coursesFromDB) return;
+    const latestSession = sessions[0];
+
     const formatted = coursesFromDB.map((course) => {
-      const safeDate = (d: any) =>
-        d && typeof d.toDate === "function" ? d.toDate() : d instanceof Date ? d : new Date(d);
+      const startDate = safeDate((course as any).startDate);
+      const endDate = safeDate((course as any).endDate);
+
+      // Priority Logic: Use Session dates if available for real-time status calculation
+      const computeStart = latestSession ? latestSession.trainStart : startDate;
+      const computeEnd = latestSession ? latestSession.trainEnd : endDate;
+
+      // COMPUTE STANDARDIZED STATUS (Includes course-specific endDate check)
+      const status = computeStatus(!!course.instructorId, computeStart, computeEnd, endDate);
+
       return {
         ...course,
-        startDate: safeDate((course as any).startDate),
-        endDate: safeDate((course as any).endDate),
+        startDate,
+        endDate,
         createdAt: safeDate((course as any).createdAt),
         updatedAt: safeDate((course as any).updatedAt),
         materials: course.materials || [],
+        status,
       } as Course;
     });
     setCourses(formatted);
-  }, [coursesFromDB]);
+  }, [coursesFromDB, sessions]);
 
   /* -------------------------
      Filtered view
@@ -163,97 +205,80 @@ export const CourseManagement: React.FC = () => {
     return true;
   };
 
-  const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date) => {
+  const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date, courseEndDate: Date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (!trainerExists) return "draft";
     const s = new Date(startDate);
     const e = new Date(endDate);
+    const ce = new Date(courseEndDate);
     s.setHours(0, 0, 0, 0);
     e.setHours(0, 0, 0, 0);
+    ce.setHours(0, 0, 0, 0);
 
-    if (today > e) return "completed";
-    if (today >= s && today <= e) return "active";
+    if (today > ce || today > e) return "completed";
+    if (today < s) return "draft";
     return "active";
   };
 
   /* -------------------------
      Activity logging
   ------------------------- */
-  const logActivity = async (userName: string, action: string, target: string, details?: string) => {
+  const logActivity = async (action: string, target: string, details?: string) => {
+    if (!auth.currentUser) return;
     try {
       await addDoc(collection(db, "activityLogs"), {
-        userName,
+        userName: auth.currentUser.displayName || "Admin",
+        userId: auth.currentUser.uid,
+        userRole: "admin",
         action,
         target,
         details: details || "",
         timestamp: serverTimestamp(),
-      } as ActivityLog);
+      });
     } catch (err: any) {
       console.error("Failed to log activity:", err);
     }
   };
 
   /* -------------------------
-     Get instructor UID by name + role
-  ------------------------- */
-  const getInstructorUid = async (instructorName: string) => {
-    const usersRef = collection(db, "users");
-    const q = query(usersRef, where("displayName", "==", instructorName), where("role", "==", "trainer"));
-    const snap = await getDocs(q);
-    if (!snap.empty) return snap.docs[0].id;
-    return "";
-  };
-
-  /* -------------------------
      Add Course
   ------------------------- */
   const handleAddCourse = async () => {
-    if (!newCourse.title.trim() || !newCourse.instructorName.trim()) {
-      alert("Please fill all required fields.");
+    if (!newCourse.title.trim()) {
+      alert("Please fill the course title.");
       return;
     }
-    if (!validateDatesWithSessions(newCourse.startDate, newCourse.endDate)) return;
+    if (!validateDatesWithSessions(new Date(newCourse.startDate as any), new Date(newCourse.endDate as any))) return;
 
-    setLoading(true); // <-- Disable buttons
+    setLoading(true);
 
     try {
-      const instructorId = await getInstructorUid(newCourse.instructorName);
-      const trainerExists = !!instructorId;
-      const status = computeStatus(trainerExists, newCourse.startDate, newCourse.endDate);
+      const status = computeStatus(
+        !!newCourse.instructorId,
+        new Date(newCourse.startDate as any),
+        new Date(newCourse.endDate as any),
+        new Date(newCourse.endDate as any)
+      );
 
       const coursePayload = {
         ...newCourse,
-        instructorId,
         status,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
-      const courseRef = await addDoc(collection(db, "courses"), coursePayload);
+      await addDoc(collection(db, "courses"), coursePayload);
 
-      setCourses((prev) => [
-        {
-          ...newCourse,
-          id: courseRef.id,
-          instructorId,
-          status,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as Course,
-        ...prev,
-      ]);
-
-      await logActivity("Admin", "added", `course: ${newCourse.title}`);
+      await logActivity("added", `course: ${newCourse.title}`);
       setNewCourse({ ...defaultCourseData });
-      setNewMaterial("");
       setShowForm(false);
       alert("Course added successfully!");
     } catch (err: any) {
       console.error(err);
       alert(`Error adding course: ${err.message || err}`);
     } finally {
-      setLoading(false); // <-- Re-enable buttons
+      setLoading(false);
     }
   };
 
@@ -262,34 +287,25 @@ export const CourseManagement: React.FC = () => {
   ------------------------- */
   const handleSaveEdit = async () => {
     if (!editingCourse) return;
-    if (!editingCourse.instructorName.trim()) {
-      alert("Instructor name is required.");
-      return;
-    }
-    if (!validateDatesWithSessions(editingCourse.startDate, editingCourse.endDate)) return;
+    if (!validateDatesWithSessions(new Date(editingCourse.startDate as any), new Date(editingCourse.endDate as any))) return;
 
-    setLoading(true); // <-- Disable buttons
+    setLoading(true);
 
     try {
-      const instructorId = await getInstructorUid(editingCourse.instructorName);
-      const status = computeStatus(!!instructorId, editingCourse.startDate, editingCourse.endDate);
+      const status = computeStatus(
+        !!editingCourse.instructorId,
+        new Date(editingCourse.startDate as any),
+        new Date(editingCourse.endDate as any),
+        new Date(editingCourse.endDate as any)
+      );
 
       await updateDoc(doc(db, "courses", editingCourse.id!), {
         ...editingCourse,
-        instructorId,
         status,
         updatedAt: serverTimestamp(),
       });
 
-      setCourses((prev) =>
-        prev.map((c) =>
-          c.id === editingCourse.id
-            ? { ...c, ...editingCourse, instructorId, status, updatedAt: new Date() }
-            : c
-        )
-      );
-
-      await logActivity("Admin", "edited", `course: ${editingCourse.title}`);
+      await logActivity("edited", `course: ${editingCourse.title}`);
       setEditingCourse(null);
       setShowForm(false);
       alert("Course updated successfully!");
@@ -297,7 +313,7 @@ export const CourseManagement: React.FC = () => {
       console.error(err);
       alert(`Error updating course: ${err.message || err}`);
     } finally {
-      setLoading(false); // <-- Re-enable buttons
+      setLoading(false);
     }
   };
 
@@ -307,103 +323,84 @@ export const CourseManagement: React.FC = () => {
   const handleDeleteCourse = async (course: Course) => {
     if (!window.confirm("Are you sure you want to delete this course?")) return;
 
-    setLoading(true); // <-- Disable buttons
+    setLoading(true);
 
     try {
       await deleteDoc(doc(db, "courses", course.id!));
-      setCourses((prev) => prev.filter((c) => c.id !== course.id));
-      await logActivity("Admin", "deleted", `course: ${course.title}`);
+      await logActivity("deleted", `course: ${course.title}`);
       alert("Course deleted successfully!");
     } catch (err: any) {
       console.error(err);
       alert(`Error deleting course: ${err.message || err}`);
     } finally {
-      setLoading(false); // <-- Re-enable buttons
+      setLoading(false);
     }
   };
 
   /* -------------------------
-     Auto-update draft courses if trainer exists
+     Auto-update courses logic
   ------------------------- */
   useEffect(() => {
-    const usersRef = collection(db, "users");
-    const unsubscribe = onSnapshot(usersRef, async (snapshot) => {
-      const users = snapshot.docs.map((d) => {
-        const data = d.data() as any;
-        return { id: d.id, displayName: data.displayName || "", role: data.role || "" };
-      });
+    if (sessions.length === 0 || courses.length === 0) return;
 
-      if (users.length === 0) return;
+    const latestSession = sessions[0];
 
-      const coursesRef = collection(db, "courses");
-      const draftQuery = query(coursesRef, where("status", "==", "draft"));
-      const draftSnap = await getDocs(draftQuery);
-      if (draftSnap.empty) return;
+    const runAutomations = async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      for (const courseDoc of draftSnap.docs) {
-        const courseData = courseDoc.data() as any;
-        const courseInstructorName = normalize(courseData.instructorName);
+      for (const course of courses) {
+        const ce = safeDate(course.endDate);
+        ce.setHours(0, 0, 0, 0);
 
-        const matchedUser = users.find(
-          (u) => normalize(u.displayName) === courseInstructorName && u.role === "trainer"
-        );
-
-        if (matchedUser) {
-          const start = courseData.startDate?.toDate ? courseData.startDate.toDate() : new Date(courseData.startDate);
-          const end = courseData.endDate?.toDate ? courseData.endDate.toDate() : new Date(courseData.endDate);
-          const newStatus = computeStatus(true, start, end);
-
-          await updateDoc(doc(db, "courses", courseDoc.id), {
-            instructorId: matchedUser.id,
-            status: newStatus,
-            updatedAt: serverTimestamp(),
-          });
-
-          setCourses((prev) =>
-            prev.map((c) =>
-              c.id === courseDoc.id
-                ? { ...c, instructorId: matchedUser.id, status: newStatus, updatedAt: new Date() }
-                : c
-            )
-          );
-
-          await logActivity(
-            "System",
-            "auto-updated",
-            `course: ${courseData.title || courseDoc.id}`,
-            `Matched trainer ${matchedUser.displayName} and set instructorId & status => ${newStatus}`
-          );
+        // 1. Completion logic (Session End OR Course End)
+        if ((today > latestSession.trainEnd || today > ce) && course.status !== "completed" && course.instructorId) {
+          try {
+            await updateDoc(doc(db, "courses", course.id), {
+              status: "completed",
+              updatedAt: serverTimestamp()
+            });
+            await logActivity("auto-completed", `course: ${course.title}`, `End date passed.`);
+          } catch (err) { console.error(err); }
+        }
+        // 2. Draft logic (Session Start)
+        else if (today < latestSession.trainStart && course.status === "active") {
+          try {
+            await updateDoc(doc(db, "courses", course.id), {
+              status: "draft",
+              updatedAt: serverTimestamp()
+            });
+            await logActivity("auto-updated", `course: ${course.title}`, `Session hasn't started yet.`);
+          } catch (err) { console.error(err); }
         }
       }
-    });
+    };
 
-    return () => unsubscribe();
-  }, []);
+    runAutomations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, JSON.stringify(courses.map(c => ({ id: c.id, status: c.status })))]);
 
   const datePickerClass = "border rounded p-2 w-full dark:bg-gray-700 dark:text-white dark:border-gray-600";
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Course Management</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Manage all courses</p>
         </div>
         <Button
-          disabled={loading} // <-- Disable when loading
+          disabled={loading}
           onClick={() => {
             setShowForm(true);
             setEditingCourse(null);
             setNewCourse({ ...defaultCourseData, startDate: new Date(), endDate: new Date() });
-            setNewMaterial("");
           }}
         >
           <Plus className="w-4 h-4 mr-2" /> Add Course
         </Button>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardContent>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -427,7 +424,6 @@ export const CourseManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Modal Form */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)}>
         <div className="p-6 w-full max-w-lg mx-auto">
           <h2 className="text-xl font-semibold mb-6 text-gray-900 dark:text-gray-100">
@@ -444,15 +440,39 @@ export const CourseManagement: React.FC = () => {
                   : setNewCourse({ ...newCourse, title: e.target.value })
               }
             />
-            <Input
-              placeholder="Instructor Name (full display name)"
-              value={editingCourse ? editingCourse.instructorName : newCourse.instructorName}
-              onChange={(e) =>
-                editingCourse
-                  ? setEditingCourse({ ...editingCourse, instructorName: e.target.value })
-                  : setNewCourse({ ...newCourse, instructorName: e.target.value })
-              }
-            />
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Assigned Trainer
+              </label>
+              <select
+                className="w-full border rounded p-2 dark:bg-gray-700 dark:text-white dark:border-gray-600"
+                value={editingCourse ? editingCourse.instructorId : newCourse.instructorId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const trainer = trainers.find(t => t.id === val);
+                  if (editingCourse) {
+                    setEditingCourse({
+                      ...editingCourse,
+                      instructorId: val,
+                      instructorName: trainer?.displayName || ""
+                    });
+                  } else {
+                    setNewCourse({
+                      ...newCourse,
+                      instructorId: val,
+                      instructorName: trainer?.displayName || ""
+                    });
+                  }
+                }}
+              >
+                <option value="">-- Select Trainer --</option>
+                {trainers.map(t => (
+                  <option key={t.id} value={t.id}>{t.displayName}</option>
+                ))}
+              </select>
+            </div>
+
             <Input
               placeholder="Category"
               value={editingCourse ? editingCourse.category : newCourse.category}
@@ -473,19 +493,19 @@ export const CourseManagement: React.FC = () => {
               }
             />
 
-            {/* Date Pickers */}
             <div className="flex gap-2">
               <div className="flex flex-col w-full">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Start Date
                 </label>
                 <DatePicker
-                  selected={editingCourse ? editingCourse.startDate : newCourse.startDate}
-                  onChange={(date: Date) =>
+                  selected={(editingCourse ? editingCourse.startDate : newCourse.startDate) as Date}
+                  onChange={(date: Date | null) => {
+                    if (!date) return;
                     editingCourse
                       ? setEditingCourse({ ...editingCourse, startDate: date })
                       : setNewCourse({ ...newCourse, startDate: date })
-                  }
+                  }}
                   className={datePickerClass}
                 />
               </div>
@@ -494,12 +514,13 @@ export const CourseManagement: React.FC = () => {
                   End Date
                 </label>
                 <DatePicker
-                  selected={editingCourse ? editingCourse.endDate : newCourse.endDate}
-                  onChange={(date: Date) =>
+                  selected={(editingCourse ? editingCourse.endDate : newCourse.endDate) as Date}
+                  onChange={(date: Date | null) => {
+                    if (!date) return;
                     editingCourse
                       ? setEditingCourse({ ...editingCourse, endDate: date })
                       : setNewCourse({ ...newCourse, endDate: date })
-                  }
+                  }}
                   className={datePickerClass}
                 />
               </div>
@@ -517,7 +538,6 @@ export const CourseManagement: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Courses Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {coursesLoading ? (
           [...Array(6)].map((_, i) => (
@@ -529,27 +549,17 @@ export const CourseManagement: React.FC = () => {
           <p className="text-center text-gray-500 dark:text-gray-400">No courses found.</p>
         ) : (
           filteredCourses.map((course) => (
-            <Card key={course.id}>
-              <CardContent>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{course.title}</h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  <strong>Trainer: </strong> {course.instructorName || "—"} | <strong>Status:</strong> {course.status}
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <Edit2
-                    className="w-5 h-5 text-blue-500 cursor-pointer hover:text-blue-700"
-                    onClick={() => {
-                      setEditingCourse(course);
-                      setShowForm(true);
-                    }}
-                  />
-                  <Trash2
-                    className="w-5 h-5 text-red-500 cursor-pointer hover:text-red-700"
-                    onClick={() => handleDeleteCourse(course)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <CourseCard
+              key={course.id}
+              course={course}
+              showActions={true}
+              onEdit={() => {
+                setEditingCourse(course);
+                setShowForm(true);
+              }}
+              onDelete={() => handleDeleteCourse(course)}
+              className="rounded-3xl border-none shadow-md hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 bg-white dark:bg-gray-800/80 backdrop-blur-sm"
+            />
           ))
         )}
       </div>

@@ -49,10 +49,10 @@ export const formatDate = (value: any): string => {
     return isNaN(parsedDate.getTime())
       ? "Invalid Date"
       : parsedDate.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
   } catch {
     return "Invalid Date";
   }
@@ -92,52 +92,64 @@ export const CourseCard: React.FC<CourseCardProps> = ({
       transition={{ duration: 0.3 }}
     >
       <Card
-        className={`relative hover:shadow-lg transition-shadow duration-300 rounded-xl flex flex-col justify-between h-full min-h-[280px] ${className}`}
+        className={`group relative hover:shadow-2xl transition-all duration-500 rounded-[2rem] border border-gray-100 dark:border-gray-800 flex flex-col justify-between h-full min-h-[260px] overflow-hidden ${className}`}
       >
-        {/* ===== Header ===== */}
-        <CardHeader className="pb-0">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white line-clamp-2">
-              {course.title || "Untitled Course"}
-            </h3>
+        {/* Decorative Top Accent */}
+        <div className={`absolute top-0 left-0 right-0 h-1.5 ${levelColor.split(' ')[0]}`} />
 
-            <div className="flex gap-2 flex-wrap">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${levelColor}`}>
-                {course.level
-                  ? course.level.charAt(0).toUpperCase() + course.level.slice(1)
-                  : "N/A"}
+        {/* ===== Header ===== */}
+        <CardHeader className="pt-6 pb-2">
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex flex-wrap gap-2">
+              <span className={`px-3 py-0.5 rounded-xl text-[10px] uppercase tracking-wider font-bold shadow-sm ${levelColor}`}>
+                {course.level || "Beginner"}
               </span>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}>
-                {course.status
-                  ? course.status.charAt(0).toUpperCase() + course.status.slice(1)
-                  : "N/A"}
+              <span className={`px-3 py-0.5 rounded-xl text-[10px] uppercase tracking-wider font-bold shadow-sm ${statusColor}`}>
+                {course.status || "Active"}
               </span>
             </div>
           </div>
 
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
-            Trainer: {course.instructorName || "Unknown Instructor"}
-          </p>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight group-hover:text-blue-600 transition-colors line-clamp-2">
+            {course.title || "Untitled Course"}
+          </h3>
+
+          <div className="mt-2 flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-bold text-[10px] uppercase">
+              {(course.instructorName || 'U').charAt(0)}
+            </div>
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {course.instructorName || "Unknown Instructor"}
+            </p>
+          </div>
         </CardHeader>
 
         {/* ===== Content ===== */}
-        <CardContent className="flex-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm sm:text-base text-gray-600 dark:text-gray-400">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
-              {course.hours ? `${course.hours} hours` : "N/A"}
+        <CardContent className="pb-4">
+          <div className="grid grid-cols-2 gap-y-2 gap-x-2">
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                <Clock className="w-3.5 h-3.5 text-gray-400" />
+              </div>
+              <span className="text-[11px] font-semibold">{course.hours ? `${course.hours} hrs` : "N/A"}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-              {formatDate(course.startDate)}
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                <BookOpen className="w-3.5 h-3.5 text-gray-400" />
+              </div>
+              <span className="text-[11px] font-semibold truncate max-w-[70px]">{course.category || "General"}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
-              {course.category || "Uncategorized"}
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              </div>
+              <span className="text-[11px] font-semibold">{formatDate(course.startDate)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-              {course.endDate ? formatDate(course.endDate) : "N/A"}
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+              <div className="p-1 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+              </div>
+              <span className="text-[11px] font-semibold">{course.endDate ? formatDate(course.endDate) : "N/A"}</span>
             </div>
           </div>
         </CardContent>
@@ -161,21 +173,23 @@ export const CourseCard: React.FC<CourseCardProps> = ({
               </div>
             )}
 
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap pb-2">
               {onEdit && (
                 <button
                   onClick={onEdit}
-                  className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9"
+                  title="Edit Course"
+                  className="group/btn bg-blue-50/80 dark:bg-blue-900/20 hover:bg-blue-500 text-blue-600 dark:text-blue-400 hover:text-white p-2 rounded-xl flex items-center justify-center w-9 h-9 transition-all duration-300 shadow-sm hover:shadow-blue-200 dark:hover:shadow-none border border-blue-100 dark:border-blue-800 hover:border-blue-500 transform hover:scale-110 active:scale-95"
                 >
-                  <Edit2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <Edit2 className="w-4 h-4 transition-transform group-hover/btn:rotate-12" />
                 </button>
               )}
               {onDelete && (
                 <button
                   onClick={onDelete}
-                  className="bg-red-500 hover:bg-red-600 text-white p-2 rounded flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9"
+                  title="Delete Course"
+                  className="group/btn bg-red-50/80 dark:bg-red-900/20 hover:bg-red-500 text-red-600 dark:text-red-400 hover:text-white p-2 rounded-xl flex items-center justify-center w-9 h-9 transition-all duration-300 shadow-sm hover:shadow-red-200 dark:hover:shadow-none border border-red-100 dark:border-red-800 hover:border-red-500 transform hover:scale-110 active:scale-95"
                 >
-                  <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <Trash2 className="w-4 h-4 transition-transform group-hover/btn:-rotate-12" />
                 </button>
               )}
             </div>

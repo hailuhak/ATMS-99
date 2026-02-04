@@ -62,30 +62,44 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
     }
     
-    // Feedbacks - trainee can write, trainer/admin can read their own feedbacks
+    // Feedbacks - participants or admin can manage
     match /feedbacks/{feedbackId} {
-      // Collection queries (where trainerId == uid)
+      allow read: if request.auth != null && (
+        resource.data.trainerId == request.auth.uid || 
+        resource.data.traineeId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.trainerId == request.auth.uid || 
+        request.resource.data.traineeId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      allow update: if request.auth != null && (
+        resource.data.trainerId == request.auth.uid || 
+        resource.data.traineeId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      allow delete: if request.auth != null && (
+        (resource.data.traineeId == request.auth.uid && resource.data.sender == 'trainee') ||
+        (resource.data.trainerId == request.auth.uid && resource.data.sender == 'trainer') ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
       allow list: if request.auth != null;
-      // Individual document reads
-      allow get: if request.auth != null && 
-        (resource.data.trainerId == request.auth.uid || 
-         resource.data.traineeId == request.auth.uid ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-      allow write: if request.auth != null;
     }
     
-    // Hidden messages - trainer can manage their own hidden messages
+    // Hidden messages - participants can manage their own hidden messages
     match /hiddenMessages/{hiddenId} {
-      // Collection queries
+      allow read, delete: if request.auth != null && (
+        resource.data.get('trainerId', null) == request.auth.uid ||
+        resource.data.get('traineeId', null) == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.get('trainerId', null) == request.auth.uid ||
+        request.resource.data.get('traineeId', null) == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
       allow list: if request.auth != null;
-      // Individual document reads
-      allow get: if request.auth != null && 
-        (resource.data.trainerId == request.auth.uid ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-      allow write: if request.auth != null && 
-        (resource.data.trainerId == request.auth.uid ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-      allow create: if request.auth != null && request.resource.data.trainerId == request.auth.uid;
     }
     
     // Progress tracking
@@ -112,7 +126,10 @@ service cloud.firestore {
     // Activity logs - all users can create their own logs, admins/trainers can manage
     match /activityLogs/{logId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || 
+        request.resource.data.trainerId == request.auth.uid
+      );
       allow update, delete: if request.auth != null && 
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'trainer'];
     }

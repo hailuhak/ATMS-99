@@ -16,6 +16,8 @@ import {
 import { useAuth } from "../../../contexts/AuthContext";
 import { Card, CardHeader, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
+import { User, GraduationCap, Save, Search } from "lucide-react";
+import { Input } from "../../../components/ui/Input";
 
 interface Course {
   courseId: string;
@@ -27,7 +29,7 @@ interface Enrollment {
   courses: Course[];
 }
 
-interface User {
+interface UserProfile {
   displayName: string;
 }
 
@@ -37,6 +39,8 @@ export const TrainerGrades: React.FC = () => {
   const [grades, setGrades] = useState<{ [key: string]: number }>({});
   const [userNames, setUserNames] = useState<{ [key: string]: string }>({});
   const [trainerCourseIds, setTrainerCourseIds] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   // ✅ Step 1: Fetch trainer's courses first
   useEffect(() => {
@@ -70,7 +74,6 @@ export const TrainerGrades: React.FC = () => {
 
         if (Array.isArray(d.courses)) {
           d.courses.forEach((course: any) => {
-            // ✅ Only include courses that belong to this trainer
             if (trainerCourseIds.has(course.courseId)) {
               if (!data[userId]) data[userId] = { userId, courses: [] };
               data[userId].courses.push({ courseId: course.courseId, title: course.title });
@@ -82,13 +85,12 @@ export const TrainerGrades: React.FC = () => {
 
       setEnrollments(Object.values(data));
 
-      // Fetch user names from "users" collection
       const names: { [key: string]: string } = {};
       await Promise.all(
         Array.from(userIdsToFetch).map(async (uid) => {
           const userDoc = await getDoc(doc(db, "users", uid));
           if (userDoc.exists()) {
-            const userData = userDoc.data() as User;
+            const userData = userDoc.data() as UserProfile;
             names[uid] = userData.displayName || "Unknown";
           } else {
             names[uid] = "Unknown";
@@ -125,13 +127,11 @@ export const TrainerGrades: React.FC = () => {
     fetchGrades();
   }, [currentUser]);
 
-  // ✅ Handle input change
   const handleInputChange = (userId: string, courseId: string, value: number) => {
     const key = `${userId}_${courseId}`;
     setGrades({ ...grades, [key]: value });
   };
 
-  // ✅ Function to notify admin when grades change
   const notifyAdminOnGradeChange = async (
     trainerName: string,
     traineeName: string,
@@ -150,149 +150,164 @@ export const TrainerGrades: React.FC = () => {
     }
   };
 
-  // ✅ Save grades with ownership validation
-  const handleSave = async (trainee: Enrollment) => {
+  const handleSaveAll = async () => {
     if (!currentUser) return;
+    setIsSaving(true);
 
-    const trainerDoc = await getDoc(doc(db, "users", currentUser.uid));
-    const trainerName = trainerDoc.exists()
-      ? (trainerDoc.data() as User).displayName || "Trainer"
-      : "Trainer";
+    try {
+      const trainerDoc = await getDoc(doc(db, "users", currentUser.uid));
+      const trainerName = trainerDoc.exists()
+        ? (trainerDoc.data() as UserProfile).displayName || "Trainer"
+        : "Trainer";
 
-    for (const course of trainee.courses) {
-      // ✅ Ownership validation: Only save grades for courses this trainer owns
-      if (!trainerCourseIds.has(course.courseId)) {
-        console.warn(`Trainer ${currentUser.uid} attempted to grade course ${course.courseId} they don't own`);
-        continue;
+      for (const trainee of enrollments) {
+        for (const course of trainee.courses) {
+          if (!trainerCourseIds.has(course.courseId)) continue;
+
+          const key = `${trainee.userId}_${course.courseId}`;
+          const gradeValue = grades[key];
+          if (gradeValue == null) continue;
+
+          // Check if already exists to update or create
+          const q = query(
+            collection(db, "grades"),
+            where("trainerId", "==", currentUser.uid),
+            where("traineeId", "==", trainee.userId),
+            where("courseId", "==", course.courseId)
+          );
+
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            await updateDoc(snapshot.docs[0].ref, { grade: gradeValue, updatedAt: Timestamp.now() });
+          } else {
+            await addDoc(collection(db, "grades"), {
+              traineeId: trainee.userId,
+              traineeName: userNames[trainee.userId] || "Unknown",
+              courseId: course.courseId,
+              courseTitle: course.title,
+              trainerId: currentUser.uid,
+              grade: gradeValue,
+              createdAt: Timestamp.now(),
+            });
+          }
+
+          await notifyAdminOnGradeChange(trainerName, userNames[trainee.userId] || "Unknown", course.title, gradeValue);
+
+          await addDoc(collection(db, "activityLogs"), {
+            userName: trainerName,
+            trainerId: currentUser.uid,
+            action: "Updated Grade",
+            target: userNames[trainee.userId] || "Unknown",
+            details: `Set grade to ${gradeValue}% for ${course.title}`,
+            timestamp: serverTimestamp(),
+          });
+        }
       }
-
-      const key = `${trainee.userId}_${course.courseId}`;
-      const gradeValue = grades[key];
-      if (gradeValue == null) continue;
-
-      const q = query(
-        collection(db, "grades"),
-        where("trainerId", "==", currentUser.uid),
-        where("traineeId", "==", trainee.userId),
-        where("courseId", "==", course.courseId)
-      );
-
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const docRef = snapshot.docs[0].ref;
-        await updateDoc(docRef, { grade: gradeValue, updatedAt: Timestamp.now() });
-      } else {
-        await addDoc(collection(db, "grades"), {
-          traineeId: trainee.userId,
-          traineeName: userNames[trainee.userId] || "Unknown",
-          courseId: course.courseId,
-          courseTitle: course.title,
-          trainerId: currentUser.uid,
-          grade: gradeValue,
-          createdAt: Timestamp.now(),
-        });
-      }
-
-      // ✅ Send notification to admin
-      await notifyAdminOnGradeChange(
-        trainerName,
-        userNames[trainee.userId] || "Unknown",
-        course.title,
-        gradeValue
-      );
-
-      // ✅ Add activity log for trainer (this is new)
-      try {
-        await addDoc(collection(db, "activityLogs"), {
-          userName: trainerName,
-          trainerId: currentUser.uid,
-          action: "Updated Grade",
-          target: userNames[trainee.userId] || "Unknown",
-          details: `Set grade to ${gradeValue}% for ${course.title}`,
-          timestamp: serverTimestamp(),
-        });
-      } catch (err) {
-        console.error("Error adding activity log:", err);
-      }
+      alert("✅ All grades saved successfully!");
+    } catch (err) {
+      console.error("Save all error:", err);
+      alert("❌ Failed to save some grades. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
-
-    alert(`✅ Grades saved for ${userNames[trainee.userId] || "Unknown"}`);
   };
 
+  const filteredEnrollments = enrollments.filter(trainee => {
+    const name = userNames[trainee.userId]?.toLowerCase() || "";
+    return name.includes(searchTerm.toLowerCase());
+  });
 
-  // ✅ UI
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
-        Trainee Grades
-      </h2>
+    <div className="p-6 space-y-6 bg-gray-50/50 dark:bg-transparent min-h-full rounded-3xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trainee Grades</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1 font-medium">Manage student performance from one place</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="relative w-full md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              className="pl-10 h-10 border-gray-300 dark:border-gray-600 focus:border-blue-500 focus:ring-blue-500/20"
+              placeholder="Search students..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <Button
+            onClick={handleSaveAll}
+            disabled={isSaving || enrollments.length === 0}
+            className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2"
+          >
+            {isSaving ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Save All Changes
+          </Button>
+        </div>
+      </div>
 
-      {enrollments.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400">
-          No trainees found under your supervision.
-        </p>
+      {filteredEnrollments.length === 0 ? (
+        <Card className="p-12 text-center bg-white dark:bg-gray-800/50 border-dashed border-2 border-gray-200 dark:border-gray-700 rounded-2xl">
+          <GraduationCap className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400 font-medium">No trainees found under your supervision.</p>
+        </Card>
       ) : (
-        enrollments.map((trainee) => (
+        filteredEnrollments.map((trainee) => (
           <Card
             key={trainee.userId}
-            className="mb-6 bg-white dark:bg-gray-900 shadow-lg rounded-2xl border border-gray-200 dark:border-gray-700"
+            className="bg-white dark:bg-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700"
           >
-            <CardHeader className="flex justify-between items-center">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                {userNames[trainee.userId] || "Unknown"}
-              </h3>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded-lg transition"
-                onClick={() => handleSave(trainee)}
-              >
-                Save
-              </Button>
+            <CardHeader className="bg-gray-100/50 dark:bg-gray-900/50 py-4 px-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30">
+                  <User className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  {userNames[trainee.userId] || "Unknown Student"}
+                </h3>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm border-collapse">
+                <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">
-                      <th className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-left">
-                        Course
-                      </th>
-                      <th className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center">
-                        Grade
-                      </th>
-                      <th className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center">
-                        Add / Edit Grade (0-100)
-                      </th>
+                    <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-wider text-[11px]">Course Title</th>
+                      <th className="px-6 py-4 text-center font-bold uppercase tracking-wider text-[11px]">Current Grade</th>
+                      <th className="px-6 py-4 text-right font-bold uppercase tracking-wider text-[11px]">Update (%)</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {trainee.courses.map((course) => {
                       const key = `${trainee.userId}_${course.courseId}`;
                       const currentGrade = grades[key];
 
                       return (
-                        <tr
-                          key={course.courseId}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                        >
-                          <td className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-gray-700 dark:text-gray-200">
+                        <tr key={course.courseId} className="hover:bg-gray-50/80 dark:hover:bg-gray-900/20 transition-colors">
+                          <td className="px-6 py-4 text-gray-900 dark:text-white font-semibold">
                             {course.title}
                           </td>
-                          <td className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center font-bold text-blue-600 dark:text-blue-400">
-                            {currentGrade !== undefined ? `${currentGrade}%` : '-'}
+                          <td className="px-6 py-4 text-center">
+                            <span className={`text-base font-black ${currentGrade >= 50 ? 'text-green-600 dark:text-green-500' : 'text-blue-600 dark:text-blue-400'}`}>
+                              {currentGrade !== undefined ? `${currentGrade}%` : '-'}
+                            </span>
                           </td>
-                          <td className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-center">
+                          <td className="px-6 py-4 text-right">
                             <input
                               type="number"
                               min="0"
                               max="100"
-                              className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-lg p-1 w-20 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={grades[key] || ""}
+                              placeholder="0"
+                              className="w-20 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-xl p-2 text-center font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm"
+                              value={grades[key] === undefined ? "" : grades[key]}
                               onChange={(e) =>
                                 handleInputChange(
                                   trainee.userId,
                                   course.courseId,
-                                  Number(e.target.value)
+                                  e.target.value === "" ? 0 : Number(e.target.value)
                                 )
                               }
                             />
@@ -310,3 +325,5 @@ export const TrainerGrades: React.FC = () => {
     </div>
   );
 };
+
+export default TrainerGrades;

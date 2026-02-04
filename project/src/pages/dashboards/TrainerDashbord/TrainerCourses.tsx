@@ -13,29 +13,46 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
+  onSnapshot,
+  orderBy,
+  limit
 } from 'firebase/firestore';
+import { auth } from '../../../lib/firebase';
+
+// ✅ Standardized safe date converter
+const safeToDate = (v: any): Date => {
+  if (!v) return new Date();
+  if (typeof v.toDate === "function") return v.toDate();
+  if (v instanceof Date) return v;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? new Date() : d;
+};
+
+// ✅ Standardized status calculation
+const computeStatus = (trainerExists: boolean, startDate: Date, endDate: Date, courseEndDate: Date) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (!trainerExists) return "draft";
+  const s = safeToDate(startDate);
+  const e = safeToDate(endDate);
+  const ce = safeToDate(courseEndDate);
+  s.setHours(0, 0, 0, 0);
+  e.setHours(0, 0, 0, 0);
+  ce.setHours(0, 0, 0, 0);
+  if (today > ce || today > e) return "completed";
+  if (today < s) return "draft";
+  return "active";
+};
 
 // Helper for logging activity
-const logActivity = async ({
-  userId,
-  userName,
-  trainerId,
-  action,
-  target,
-  details,
-}: {
-  userId: string;
-  userName: string;
-  trainerId?: string;
-  action: string;
-  target: string;
-  details?: string;
-}) => {
+const logActivity = async (action: string, target: string, details?: string) => {
+  if (!auth.currentUser) return;
   try {
     await addDoc(collection(db, 'activityLogs'), {
-      userId,
-      userName,
-      trainerId: trainerId || userId,
+      userId: auth.currentUser.uid,
+      userName: auth.currentUser.displayName || 'Trainer',
+      userRole: 'trainer',
+      trainerId: auth.currentUser.uid,
       action,
       target,
       details: details || '',
@@ -64,7 +81,6 @@ export const TrainerCourses: React.FC = () => {
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [sessionDates, setSessionDates] = useState<{ trainStart: string; trainEnd: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     title: '',
@@ -78,40 +94,48 @@ export const TrainerCourses: React.FC = () => {
 
   const [errors, setErrors] = useState<Partial<FormData>>({});
 
-  // Fetch session dates
+  // Fetch session dates (real-time)
   useEffect(() => {
-    const fetchSession = async () => {
-      const sessionSnapshot = await getDocs(collection(db, 'sessions'));
-      if (!sessionSnapshot.empty) {
-        const sessionData = sessionSnapshot.docs[0].data();
+    const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'), limit(1));
+    return onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const data = snapshot.docs[0].data();
         setSessionDates({
-          trainStart: sessionData.trainStart,
-          trainEnd: sessionData.trainEnd,
+          trainStart: safeToDate(data.trainStart).toISOString().split('T')[0],
+          trainEnd: safeToDate(data.trainEnd).toISOString().split('T')[0],
         });
       }
-    };
-    fetchSession();
+    });
   }, []);
 
-  // Fetch trainer courses
-  const fetchCourses = async () => {
-    if (!currentUser) return;
-    setCoursesLoading(true);
-    try {
-      const q = query(collection(db, 'courses'), where('instructorId', '==', currentUser.uid));
-      const snapshot = await getDocs(q);
-      const fetchedCourses: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCourses(fetchedCourses);
-    } catch (err) {
-      console.error('Error fetching courses:', err);
-    } finally {
-      setCoursesLoading(false);
-    }
-  };
-
+  // Fetch trainer courses (real-time)
   useEffect(() => {
-    fetchCourses();
-  }, [currentUser]);
+    if (!currentUser) return;
+    const q = query(collection(db, 'courses'), where('instructorId', '==', currentUser.uid));
+
+    return onSnapshot(q, (snapshot) => {
+      const loaded = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        const startDate = safeToDate(data.startDate);
+        const endDate = safeToDate(data.endDate);
+
+        // Compute real-time status
+        const computeStart = sessionDates ? safeToDate(sessionDates.trainStart) : startDate;
+        const computeEnd = sessionDates ? safeToDate(sessionDates.trainEnd) : endDate;
+        const status = computeStatus(true, computeStart, computeEnd, endDate);
+
+        return {
+          id: docSnap.id,
+          ...data,
+          startDate: startDate.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0],
+          status,
+        };
+      });
+      setCourses(loaded);
+      setCoursesLoading(false);
+    });
+  }, [currentUser, sessionDates]);
 
   // Validate field with session date checks
   const validateField = (name: string, value: string) => {
@@ -162,10 +186,10 @@ export const TrainerCourses: React.FC = () => {
     if (!currentUser) return;
     setLoading(true);
 
-    const newErrors: Partial<FormData> = {};
+    const newErrors: any = {};
     Object.keys(formData).forEach(key => {
       const error = validateField(key, (formData as any)[key]);
-      if (error) newErrors[key as keyof FormData] = error;
+      if (error) newErrors[key] = error;
     });
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -186,13 +210,7 @@ export const TrainerCourses: React.FC = () => {
           updatedAt: serverTimestamp(),
         });
 
-        await logActivity({
-          userId: currentUser.uid,
-          userName: currentUser.displayName || 'Trainer',
-          trainerId: currentUser.uid,
-          action: 'Updated Course',
-          target: formData.title,
-        });
+        await logActivity('Updated Course', formData.title);
 
         setEditingCourseId(null);
       } else {
@@ -210,14 +228,7 @@ export const TrainerCourses: React.FC = () => {
           students: [],
         });
 
-        await logActivity({
-          userId: currentUser.uid,
-          userName: currentUser.displayName || 'Trainer',
-          trainerId: currentUser.uid,
-          action: 'Added Course',
-          target: formData.title,
-          details: `Course created with ID: ${newCourseRef.id}`,
-        });
+        await logActivity('Added Course', formData.title, `Course created with ID: ${newCourseRef.id}`);
       }
 
       setFormData({
@@ -231,37 +242,12 @@ export const TrainerCourses: React.FC = () => {
       });
       setErrors({});
       setShowForm(false);
-      fetchCourses();
     } catch (err) {
       console.error('Error saving course:', err);
     } finally {
       setLoading(false);
     }
   };
-
-  // Delete a course
-  // const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
-  //   if (!window.confirm('Are you sure you want to delete this course?')) return;
-  //   if (!currentUser) return;
-
-  //   try {
-  //     setDeletingId(courseId);
-  //     await deleteDoc(doc(db, 'courses', courseId));
-  //     await logActivity({
-  //       userId: currentUser.uid,
-  //       userName: currentUser.displayName || 'Trainer',
-  //       trainerId: currentUser.uid,
-  //       action: 'Deleted Course',
-  //       target: courseTitle,
-  //       details: `Deleted course with ID: ${courseId}`,
-  //     });
-  //     fetchCourses();
-  //   } catch (err) {
-  //     console.error('Error deleting course:', err);
-  //   } finally {
-  //     setDeletingId(null);
-  //   }
-  // };
 
   // Edit a course
   const handleEditCourse = (course: any) => {
@@ -349,6 +335,8 @@ export const TrainerCourses: React.FC = () => {
                 className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               >
                 <option value="active">Active</option>
+                <option value="draft">Draft</option>
+                <option value="completed">Completed</option>
               </select>
             </div>
           </div>
@@ -432,8 +420,7 @@ export const TrainerCourses: React.FC = () => {
               course={course}
               showActions={true}
               onEdit={() => handleEditCourse(course)}
-              // onDelete={() => handleDeleteCourse(course.id, course.title)}
-              disabled={deletingId === course.id}
+              className="rounded-3xl border-none shadow-md hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 bg-white dark:bg-gray-800/80 backdrop-blur-sm"
             />
           ))
         )}
@@ -441,3 +428,5 @@ export const TrainerCourses: React.FC = () => {
     </div>
   );
 };
+
+export default TrainerCourses;

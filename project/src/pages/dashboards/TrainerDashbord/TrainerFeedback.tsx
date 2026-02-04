@@ -11,7 +11,6 @@ import {
   doc,
   serverTimestamp,
   getDoc,
-  getDocs,
 } from "firebase/firestore";
 import { Button } from "../../../components/ui/Button";
 import { Edit2, Trash2 } from "lucide-react";
@@ -48,17 +47,22 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
     prevMessagesRef.current = messages;
   }, [messages]);
 
-  // Fetch hidden messages
-  const fetchHiddenMessages = async () => {
-    const hiddenSnapshot = await getDocs(
-      query(collection(db, "hiddenMessages"), where("trainerId", "==", trainerId))
+  // Real-time hidden messages listener
+  useEffect(() => {
+    if (!trainerId) return;
+    const q = query(
+      collection(db, "hiddenMessages"),
+      where("trainerId", "==", trainerId)
     );
-    setHiddenMessageIds(hiddenSnapshot.docs.map((doc) => doc.data().messageId));
-  };
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHiddenMessageIds(snapshot.docs.map(doc => doc.data().messageId));
+    });
+    return () => unsubscribe();
+  }, [trainerId]);
 
   // Real-time feedback listener
   useEffect(() => {
-    if (!trainerId) return; // Don't run if no trainerId provided
+    if (!trainerId) return;
 
     const unsubscribe = onSnapshot(
       query(collection(db, "feedbacks"), where("trainerId", "==", trainerId)),
@@ -71,13 +75,9 @@ export const TrainerFeedback: React.FC<TrainerFeedbackProps> = ({ trainerId }) =
           sender: doc.data().sender || "trainee",
         }));
         setMessages(feedbacks.filter((m) => !hiddenMessageIds.includes(m.id)));
-      },
-      (error) => {
-        console.error("Error fetching feedbacks:", error);
       }
     );
 
-    fetchHiddenMessages();
     return () => unsubscribe();
   }, [trainerId, hiddenMessageIds]);
 

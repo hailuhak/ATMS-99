@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
@@ -11,7 +11,6 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 import { db, auth } from "../../../lib/firebase";
 
@@ -23,6 +22,16 @@ interface SessionType {
   trainStart: string;
   trainEnd: string;
 }
+
+const formatDate = (dateString: string) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
 export default function Session() {
   const [sessions, setSessions] = useState<SessionType[]>([]);
@@ -57,13 +66,16 @@ export default function Session() {
     fetchSessions();
   }, []);
 
-  const logActivity = async (action: string, target: string, message?: string) => {
+  const logActivity = async (action: string, target: string, details?: string) => {
+    if (!auth.currentUser) return;
     try {
-      await setDoc(doc(collection(db, "activityLogs")), {
-        userName: auth.currentUser?.displayName || "Admin",
+      await addDoc(collection(db, "activityLogs"), {
+        userName: auth.currentUser.displayName || "Admin",
+        userId: auth.currentUser.uid,
+        userRole: "admin",
         action,
         target,
-        message: message || "",
+        details: details || "",
         timestamp: serverTimestamp(),
       });
     } catch (err) {
@@ -111,7 +123,7 @@ export default function Session() {
         await logActivity("update", autoTitle, "Session updated successfully.");
         alert(`✅ ${autoTitle} updated!`);
       } else {
-        const docRef = await addDoc(collection(db, "sessions"), {
+        await addDoc(collection(db, "sessions"), {
           ...newSession,
           title: autoTitle,
           createdAt: serverTimestamp(),
@@ -288,10 +300,10 @@ export default function Session() {
               {sessions.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                   <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 font-medium text-gray-800 dark:text-gray-100">{s.title}</td>
-                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{s.regStart}</td>
-                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{s.regEnd}</td>
-                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{s.trainStart}</td>
-                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{s.trainEnd}</td>
+                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{formatDate(s.regStart)}</td>
+                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{formatDate(s.regEnd)}</td>
+                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{formatDate(s.trainStart)}</td>
+                  <td className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">{formatDate(s.trainEnd)}</td>
                   <td className="px-4 py-2 text-center flex items-center justify-center space-x-3">
                     <button
                       disabled={loading} // ✅ Disable Edit button

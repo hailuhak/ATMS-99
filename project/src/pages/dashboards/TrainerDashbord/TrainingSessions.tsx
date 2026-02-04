@@ -14,10 +14,9 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
-  Timestamp,
 } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
-import { TrainingSession, Course } from "../../../types";
+import { Session, Course } from "../../../types";
 
 interface GeneralSession {
   id: string;
@@ -28,11 +27,20 @@ interface GeneralSession {
   trainEnd: string;
 }
 
+// ✅ Safe date converter
+const safeToDate = (v: any): Date => {
+  if (!v) return new Date();
+  if (typeof v.toDate === "function") return v.toDate();
+  if (v instanceof Date) return v;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? new Date() : d;
+};
+
 export const TrainingSessions: React.FC = () => {
   const { currentUser } = useAuth();
-  const [sessions, setSessions] = useState<TrainingSession[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [generalSessions, setGeneralSessions] = useState<GeneralSession[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<(Course & { docId: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFormModal, setShowFormModal] = useState(false);
 
@@ -77,8 +85,8 @@ export const TrainingSessions: React.FC = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,
-        ...(doc.data() as Omit<TrainingSession, "id">),
-        date: (doc.data().date as Timestamp).toDate(),
+        ...(doc.data() as Omit<Session, "id">),
+        date: safeToDate(doc.data().date),
       }));
       data.sort((a, b) => a.date.getTime() - b.date.getTime());
       setSessions(data);
@@ -104,13 +112,14 @@ export const TrainingSessions: React.FC = () => {
     fetchSessions();
   }, []);
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString("en-GB", {
-      weekday: "short",
-      day: "2-digit",
+  const formatDate = (date: Date) => {
+    const d = safeToDate(date);
+    return d.toLocaleDateString("en-US", {
+      day: "numeric",
       month: "short",
       year: "numeric",
     });
+  };
 
   const formatStringDate = (dateString: string) => {
     if (!dateString) return "";
@@ -210,17 +219,18 @@ export const TrainingSessions: React.FC = () => {
     setShowFormModal(false);
   };
 
-  const handleEdit = (session: TrainingSession) => {
+  const handleEdit = (session: Session) => {
+    const sessionDate = safeToDate(session.date);
     setEditingSessionId(session.id);
     setCourseId(session.courseId);
-    setDate(session.date.toISOString().split("T")[0]);
-    setStartTime(session.date.toTimeString().slice(0, 5));
-    const endTimeDate = new Date(session.date.getTime() + session.hours * 60 * 60 * 1000);
+    setDate(sessionDate.toISOString().split("T")[0]);
+    setStartTime(sessionDate.toTimeString().slice(0, 5));
+    const endTimeDate = new Date(sessionDate.getTime() + session.hours * 60 * 60 * 1000);
     setEndTime(endTimeDate.toTimeString().slice(0, 5));
     setShowFormModal(true);
   };
 
-  const handleDelete = async (session: TrainingSession) => {
+  const handleDelete = async (session: Session) => {
     if (!confirm("Are you sure you want to delete this session?")) return;
 
     setProcessing(true); // ✅ Start processing
@@ -257,9 +267,8 @@ export const TrainingSessions: React.FC = () => {
                 {generalSessions.map((session, idx) => (
                   <tr
                     key={session.id}
-                    className={`border-b border-gray-200 dark:border-gray-700 ${
-                      idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
-                    } hover:bg-gray-100 dark:hover:bg-gray-700`}
+                    className={`border-b border-gray-200 dark:border-gray-700 ${idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
+                      } hover:bg-gray-100 dark:hover:bg-gray-700`}
                   >
                     <td className="px-4 py-2 font-medium text-gray-900 dark:text-gray-100">
                       {session.title}
@@ -322,14 +331,14 @@ export const TrainingSessions: React.FC = () => {
                 </thead>
                 <tbody>
                   {sessions.map((s, idx) => {
-                    const start = new Date(s.date);
+                    const sessionDate = safeToDate(s.date);
+                    const start = new Date(sessionDate);
                     const end = new Date(start.getTime() + s.hours * 60 * 60 * 1000);
                     return (
                       <tr
                         key={s.id}
-                        className={`border-b border-gray-200 dark:border-gray-700 ${
-                          idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
-                        } hover:bg-gray-100 dark:hover:bg-gray-700`}
+                        className={`border-b border-gray-200 dark:border-gray-700 ${idx % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
+                          } hover:bg-gray-100 dark:hover:bg-gray-700`}
                       >
                         <td className="px-4 py-2 font-medium text-gray-900 dark:text-gray-100">
                           {s.courseName}

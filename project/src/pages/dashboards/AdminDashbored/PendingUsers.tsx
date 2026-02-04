@@ -296,7 +296,11 @@ export const PendingUsers: React.FC = () => {
                       </td>
                       <td className="px-4 py-2">
                         {user.timestamp?.toDate
-                          ? user.timestamp.toDate().toLocaleDateString()
+                          ? user.timestamp.toDate().toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })
                           : "-"}
                       </td>
                       <td className="px-4 py-2 flex gap-2">

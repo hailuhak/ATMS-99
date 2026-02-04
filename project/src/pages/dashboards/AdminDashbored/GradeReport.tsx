@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "../../../components/ui/Card";
+import { Button } from "../../../components/ui/Button";
 import {
   collection,
   doc,
@@ -12,6 +13,7 @@ import {
   addDoc,
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
+import { FileText, Save, CheckCircle2 } from "lucide-react";
 
 // Convert numeric grade to letter grade
 const getGradeLetter = (grade: number) => {
@@ -30,10 +32,10 @@ const getGradeLetter = (grade: number) => {
 // Determine color based on grade
 const getLetterGradeColor = (grade: number) => {
   if (grade >= 80)
-    return "bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-200";
+    return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
   if (grade >= 60)
-    return "bg-yellow-200 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-200";
-  return "bg-red-200 dark:bg-red-700 text-red-800 dark:text-red-200 font-bold";
+    return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+  return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-bold";
 };
 
 interface GradeItem {
@@ -54,6 +56,7 @@ interface GradeRecord {
 export default function GradeReport() {
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Real-time listener
   useEffect(() => {
@@ -116,6 +119,7 @@ export default function GradeReport() {
 
   // Save all grades
   const handleSaveAll = async () => {
+    setIsSaving(true);
     try {
       for (const t of grades) {
         const q = query(
@@ -150,106 +154,128 @@ export default function GradeReport() {
         }
       }
 
-      await logActivity("Admin", "saved", "all final grades", "Grade report updated");
-      alert("✅ Grades saved successfully!");
+      await logActivity("Admin", "Finalized", "all grade reports", "Generated certificates and summaries");
+      alert("✅ All grade records finalized and published successfully!");
     } catch (error) {
       console.error("Error saving grades:", error);
       alert("❌ Failed to save grades. Check console for details.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   if (loading)
-    return <div className="p-6 text-gray-700 dark:text-gray-300">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="w-8 h-8 border-4 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+        <span className="ml-3 font-bold text-gray-500">Loading grade data...</span>
+      </div>
+    );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Grade Report
-        </h2>
-        <button
+    <div className="min-h-screen bg-gray-50/50 dark:bg-transparent p-6 space-y-8 rounded-3xl transition-colors duration-300">
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <div>
+          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+            Comprehensive Grade Report
+          </h2>
+          <p className="text-gray-500 dark:text-gray-400 mt-1 font-medium">Manage and finalize trainee performance metrics</p>
+        </div>
+        <Button
           onClick={handleSaveAll}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+          disabled={isSaving || grades.length === 0}
+          className="px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 py-6 transition-all active:scale-95"
         >
-          Save / Update All
-        </button>
+          {isSaving ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 mr-2" />
+          )}
+          Finalize All Records
+        </Button>
       </div>
 
-      <Card className="w-full max-w-7xl shadow-lg">
-        <CardContent>
-          {/* Make table horizontally scrollable on small screens */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border border-gray-300 dark:border-gray-700 min-w-[600px] sm:min-w-full">
-              <thead className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 sticky top-0 z-10">
-                <tr>
-                  <th className="border px-4 py-2">Trainee</th>
-                  <th className="border px-4 py-2">Courses</th>
-                  <th className="border px-4 py-2">Result (100%)</th>
-                  <th className="border px-4 py-2">Letter Grade</th>
-                  <th className="border px-4 py-2">Total</th>
-                  <th className="border px-4 py-2">Average (%)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grades.map((t) => (
-                  <tr
-                    key={t.traineeId}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                  >
-                    <td className="border px-4 py-2 font-medium text-gray-900 dark:text-gray-200">
-                      {t.traineeName}
-                    </td>
-                    <td className="border px-4 py-2 text-gray-800 dark:text-gray-300">
-                      {t.courses.map((c, idx) => (
-                        <div key={c.courseId}>
-                          {c.courseTitle}
-                          {idx < t.courses.length - 1 && (
-                            <hr className="border-t border-gray-400 dark:border-gray-600 my-1" />
-                          )}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
-                      {t.courses.map((c, idx) => (
-                        <div
-                          key={c.courseId}
-                          className="px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 text-center"
-                        >
-                          {c.grade}
-                          {idx < t.courses.length - 1 && (
-                            <hr className="border-t border-gray-400 dark:border-gray-600 my-1" />
-                          )}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
-                      {t.courses.map((c, idx) => (
-                        <div
-                          key={c.courseId}
-                          className={`px-2 py-1 rounded text-center ${getLetterGradeColor(
-                            c.grade
-                          )}`}
-                        >
-                          {c.letterGrade}
-                          {idx < t.courses.length - 1 && (
-                            <hr className="border-t border-gray-400 dark:border-gray-600 my-1" />
-                          )}
-                        </div>
-                      ))}
-                    </td>
-                    <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
-                      {t.total}
-                    </td>
-                    <td className="border px-4 py-2 text-gray-900 dark:text-gray-100">
-                      {t.average.toFixed(2)}%
-                    </td>
+      {grades.length === 0 ? (
+        <Card className="p-16 text-center border-dashed border-2 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 rounded-3xl">
+          <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-xl font-bold text-gray-900 dark:text-white">No grades reported yet</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">Waiting for trainers to submit course results.</p>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden border-none shadow-xl shadow-gray-200/50 dark:shadow-none bg-white dark:bg-gray-800 rounded-3xl">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[1000px]">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                    <th className="px-6 py-5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Trainee Profile</th>
+                    <th className="px-6 py-5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Enrolled Courses</th>
+                    <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Performance</th>
+                    <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Standing</th>
+                    <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest font-black">Average (%)</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {grades.map((t) => (
+                    <tr
+                      key={t.traineeId}
+                      className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-all"
+                    >
+                      <td className="px-6 py-6 min-w-[200px]">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">
+                            {t.traineeName.charAt(0)}
+                          </div>
+                          <span className="font-bold text-gray-900 dark:text-white">{t.traineeName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-6">
+                        <div className="space-y-4">
+                          {t.courses.map((c) => (
+                            <div key={c.courseId} className="text-gray-700 dark:text-gray-300 font-semibold truncate max-w-[250px]">
+                              {c.courseTitle}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-6 text-center">
+                        <div className="space-y-4">
+                          {t.courses.map((c) => (
+                            <div key={c.courseId}>
+                              <span className="inline-flex items-center justify-center min-w-[50px] px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 font-black text-gray-900 dark:text-white">
+                                {c.grade}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-6 text-center">
+                        <div className="space-y-4">
+                          {t.courses.map((c) => (
+                            <div key={c.courseId} className="flex justify-center">
+                              <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${getLetterGradeColor(c.grade)}`}>
+                                {c.letterGrade}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-6 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                            {t.average.toFixed(1)}%
+                          </span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">Weighted Mean</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

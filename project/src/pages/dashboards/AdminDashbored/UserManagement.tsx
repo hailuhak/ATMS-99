@@ -420,26 +420,28 @@ export const UserManagement: React.FC = () => {
                         <td className="px-4 py-2 capitalize">{user.role}</td>
                         <td className="px-4 py-2">
                           {user.createdAt instanceof Date
-                            ? user.createdAt.toLocaleDateString()
+                            ? user.createdAt.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })
                             : "-"}
                         </td>
                         <td className="px-4 py-2 flex gap-2">
                           <Edit2
-                            className={`w-5 h-5 ${
-                              disableEdit
-                                ? "text-gray-400 cursor-not-allowed"
-                                : "text-blue-500 cursor-pointer hover:text-blue-700"
-                            }`}
+                            className={`w-5 h-5 ${disableEdit
+                              ? "text-gray-400 cursor-not-allowed"
+                              : "text-blue-500 cursor-pointer hover:text-blue-700"
+                              }`}
                             onClick={() => {
                               if (!disableEdit) setEditingUser(user);
                             }}
                           />
                           <Trash2
-                            className={`w-5 h-5 ${
-                              disableDelete
-                                ? "text-gray-400 cursor-not-allowed"
-                                : "text-red-500 cursor-pointer hover:text-red-700"
-                            }`}
+                            className={`w-5 h-5 ${disableDelete
+                              ? "text-gray-400 cursor-not-allowed"
+                              : "text-red-500 cursor-pointer hover:text-red-700"
+                              }`}
                             onClick={() => {
                               if (!disableDelete) handleDeleteUser(user);
                             }}
