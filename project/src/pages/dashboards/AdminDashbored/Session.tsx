@@ -307,10 +307,10 @@ export default function Session() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-800/50">
                   <tr className="text-xs uppercase font-black tracking-widest text-gray-400">
-                    <th className="px-6 py-4 text-left">Session Title</th>
+                    <th className="px-6 py-4 text-left ">Session Title</th>
                     <th className="px-6 py-4 text-left">Registration</th>
                     <th className="px-6 py-4 text-left">Training</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className="px-6 py-4 text-middel">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -319,14 +319,14 @@ export default function Session() {
                       <td className="px-6 py-5 font-bold text-gray-900 dark:text-white">{s.title}</td>
                       <td className="px-6 py-5">
                         <div className="flex flex-col">
-                          <span className="text-gray-600 dark:text-gray-300 font-medium">{formatDate(s.regStart)}</span>
-                          <span className="text-[10px] text-gray-400 uppercase tracking-tighter">— {formatDate(s.regEnd)}</span>
+                          <span className="text-blue-600 dark:text-gray-300 font-bold">{formatDate(s.regStart)}</span>
+                          <span className="text-[13px] text-red-400 uppercase tracking-tighter font-bold">— {formatDate(s.regEnd)}</span>
                         </div>
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex flex-col">
                           <span className="text-blue-600 dark:text-blue-400 font-bold">{formatDate(s.trainStart)}</span>
-                          <span className="text-[10px] text-gray-400 uppercase tracking-tighter">— {formatDate(s.trainEnd)}</span>
+                          <span className="text-[13px] text-red-400 uppercase tracking-tighter font-bold">— {formatDate(s.trainEnd)}</span>
                         </div>
                       </td>
                       <td className="px-6 py-5">
@@ -382,14 +382,14 @@ export default function Session() {
                       <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">Registration</p>
                       <div className="space-y-1">
                         <p className="text-xs text-gray-900 dark:text-white font-bold">{formatDate(s.regStart)}</p>
-                        <p className="text-[10px] text-gray-400">to {formatDate(s.regEnd)}</p>
+                        <p className="text-[12px] text-red-600">- {formatDate(s.regEnd)}</p>
                       </div>
                     </div>
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Training</p>
+                      <p className="text-[12px] font-black uppercase tracking-widest text-emerald-500 mb-2">Training</p>
                       <div className="space-y-1">
                         <p className="text-xs text-gray-900 dark:text-white font-bold">{formatDate(s.trainStart)}</p>
-                        <p className="text-[10px] text-gray-400">to {formatDate(s.trainEnd)}</p>
+                        <p className="text-[12px] text-red-400">- {formatDate(s.trainEnd)}</p>
                       </div>
                     </div>
                   </div>

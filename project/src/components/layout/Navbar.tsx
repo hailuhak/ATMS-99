@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, User, LogOut, Settings, Sun, Moon, Menu } from 'lucide-react';
+import { Bell, User, LogOut, Settings, Sun, Moon, Menu, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Button } from '../ui/Button';
@@ -15,6 +15,11 @@ export const Navbar: React.FC = () => {
   const [trainerNotifications, setTrainerNotifications] = useState<Set<string>>(new Set());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState('');
+  const [showReauthPassword, setShowReauthPassword] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  const [settingsSuccess, setSettingsSuccess] = useState('');
 
   const [userInfo, setUserInfo] = useState({ displayName: '', email: '' });
   const [loadingInfo, setLoadingInfo] = useState(true);
@@ -132,16 +137,59 @@ export const Navbar: React.FC = () => {
 
   const handleUpdateInfo = async () => {
     if (!currentUser) return;
+    setSettingsError('');
+    setSettingsSuccess('');
+
     try {
+      // If email has changed, require re-authentication
+      if (userInfo.email !== currentUser.email) {
+        setShowReauthModal(true);
+        return;
+      }
+
       await updateDoc(doc(db, 'users', currentUser.uid), {
         displayName: userInfo.displayName,
-        email: userInfo.email,
       });
-      alert('✅ User info updated successfully!');
-      setSettingsOpen(false);
-    } catch (error) {
+      setSettingsSuccess('✅ Display name updated successfully!');
+      setTimeout(() => setSettingsOpen(false), 2000);
+    } catch (error: any) {
       console.error('Failed to update user info:', error);
-      alert('❌ Failed to update info. Try again.');
+      setSettingsError('❌ Failed to update info: ' + error.message);
+    }
+  };
+
+  const { reauthenticate, verifyEmailUpdate } = useAuth();
+
+  const handleConfirmEmailChange = async () => {
+    if (!currentUser) return;
+    setLoadingInfo(true);
+    setSettingsError('');
+
+    try {
+      // 1. Re-authenticate
+      await reauthenticate(reauthPassword);
+
+      // 2. Trigger email verification to new address
+      await verifyEmailUpdate(userInfo.email);
+
+      // 3. Update Name in Firestore anyway
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        displayName: userInfo.displayName,
+      });
+
+      setSettingsSuccess('✅ Verification email sent! Please check your new email to confirm.');
+      setShowReauthModal(false);
+      setReauthPassword('');
+      setTimeout(() => setSettingsOpen(false), 5000);
+    } catch (error: any) {
+      console.error('Email change failed:', error);
+      if (error.code === 'auth/wrong-password') {
+        setSettingsError('❌ Incorrect password. Please try again.');
+      } else {
+        setSettingsError('❌ ' + error.message);
+      }
+    } finally {
+      setLoadingInfo(false);
     }
   };
 
@@ -263,12 +311,86 @@ export const Navbar: React.FC = () => {
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
                   </div>
+                  {settingsError && <p className="text-xs text-red-500 font-medium">{settingsError}</p>}
+                  {settingsSuccess && <p className="text-xs text-emerald-500 font-medium">{settingsSuccess}</p>}
                   <Button variant="primary" size="sm" onClick={handleUpdateInfo} className="w-full py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20">
                     Save Changes
                   </Button>
                 </div>
               )}
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Re-authentication Modal */}
+        <AnimatePresence>
+          {showReauthModal && (
+            <div className="fixed inset-0 z-[60] flex items-start justify-end p-4 pt-20 sm:pt-24 sm:pr-8">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={() => setShowReauthModal(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, x: 20 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.9, x: 20 }}
+                className="relative w-full max-w-[280px] bg-white dark:bg-gray-900 rounded-[2rem] p-4 sm:p-5 shadow-2xl border border-gray-100 dark:border-gray-800"
+              >
+                <h3 className="text-lg font-black mb-4 text-gray-900 dark:text-white tracking-tight text-center">Security Check</h3>
+
+                <div className="space-y-5">
+                  <div className="relative group">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-2 px-1 text-center">Current Password</label>
+                    <div className="relative">
+                      <input
+                        type={showReauthPassword ? 'text' : 'password'}
+                        value={reauthPassword}
+                        onChange={(e) => setReauthPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full px-4 py-2.5 rounded-xl border-2 border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-gray-400 font-medium text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowReauthPassword(!showReauthPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-blue-500 transition-colors"
+                      >
+                        {showReauthPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {settingsError && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="text-xs text-red-500 bg-red-50 dark:bg-red-500/10 p-4 rounded-xl border border-red-100 dark:border-red-500/20 font-semibold"
+                    >
+                      {settingsError}
+                    </motion.div>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="primary"
+                      onClick={handleConfirmEmailChange}
+                      className="w-full py-2.5 rounded-xl font-bold text-sm shadow-xl shadow-blue-500/25 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all active:scale-95"
+                      loading={loadingInfo}
+                    >
+                      Confirm
+                    </Button>
+                    <button
+                      onClick={() => setShowReauthModal(false)}
+                      className="w-full py-2 text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors uppercase tracking-widest"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
 

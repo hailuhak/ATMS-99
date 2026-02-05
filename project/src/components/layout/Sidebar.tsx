@@ -144,12 +144,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
                   </button>
                 ))}
               </nav>
-
-              <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
-                <div className="px-4 py-2 bg-blue-600/10 rounded-lg text-blue-600 dark:text-blue-400 text-xs font-semibold text-center">
-                  v3.0.1 Stable
-                </div>
-              </div>
             </motion.aside>
           </>
         )}

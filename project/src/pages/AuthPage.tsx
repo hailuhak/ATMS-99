@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface AuthPageProps {
@@ -30,6 +31,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   const [canSignup, setCanSignup] = useState(false);
   const [registrationMessage, setRegistrationMessage] = useState('');
 
+  // Password Reset States
+  const [resetMode, setResetMode] = useState(false); // Mode when returning from email link
+  const [forgotPasswordView, setForgotPasswordView] = useState(false); // View for requesting reset
+  const [oobCode, setOobCode] = useState('');
+
   const [formData, setFormData] = useState<FormData>({
     email: '',
     password: '',
@@ -38,15 +44,27 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
     role: 'trainee',
   });
 
-  const { login, signup, loginWithGoogle } = useAuth();
+  const { login, signup, loginWithGoogle, sendPasswordReset, confirmResetPassword } = useAuth();
+
+  // Check for reset password parameters in URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+    const code = urlParams.get('oobCode');
+
+    if (mode === 'resetPassword' && code) {
+      setResetMode(true);
+      setOobCode(code);
+    }
+  }, []);
 
   // Registration session check
   useEffect(() => {
     // Only check during signup mode
-    if (isLogin) {
+    if (isLogin || resetMode || forgotPasswordView) {
       setCanSignup(false);
       setRegistrationMessage('');
-      return; // Don't set up listener during login
+      return; // Don't set up listener during login, reset, or forgot password view
     }
 
     const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'), limit(10));
@@ -65,10 +83,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
       const todayStr = `${year}-${month}-${day}`;
 
       let activeSessionFound = false;
-      let latestSession = snapshot.docs[0].data();
+      const latestSession = snapshot.docs[0].data();
 
-      for (const doc of snapshot.docs) {
-        const sessionData = doc.data();
+      for (const docSnapshot of snapshot.docs) {
+        const sessionData = docSnapshot.data();
         if (!sessionData.regStart || !sessionData.regEnd) continue;
 
         if (todayStr >= sessionData.regStart && todayStr <= sessionData.regEnd) {
@@ -95,7 +113,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
     });
 
     return () => unsubscribe();
-  }, [isLogin]);
+  }, [isLogin, resetMode, forgotPasswordView]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const value = e.target.name === 'role' ? (e.target.value as Role) : e.target.value;
@@ -109,7 +127,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
     setError('');
 
     try {
-      if (isLogin) {
+      if (resetMode) {
+        if (formData.password !== formData.confirmPassword) throw new Error('Passwords do not match');
+        if (formData.password.length < 6) throw new Error('Password must be at least 6 characters long');
+
+        await confirmResetPassword(oobCode, formData.password);
+        toast.success('Password has been reset successfully. You can now sign in.');
+        setTimeout(() => {
+          setResetMode(false);
+          setIsLogin(true);
+          // Clean up URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }, 3000);
+      } else if (isLogin) {
         await login(formData.email, formData.password);
       } else {
         if (formData.password !== formData.confirmPassword) throw new Error('Passwords do not match');
@@ -149,6 +179,44 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
     }
   };
 
+  const handleForgotPassword = () => {
+    setForgotPasswordView(true);
+    setError('');
+  };
+
+  const handleRequestReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.email) {
+      setError('Please enter your email address.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', formData.email.toLowerCase()), limit(1));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        throw new Error('This account is not registered.');
+      }
+
+      await sendPasswordReset(formData.email);
+      const successMsg = 'A password reset link has been sent to your email. Click it to confirm and apply your new password.';
+      toast.success(successMsg, { duration: 6000 });
+
+      // Optional: close the view after a short delay
+      setTimeout(() => {
+        setForgotPasswordView(false);
+      }, 7000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-emerald-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <motion.div
@@ -174,10 +242,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
         >
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              {isLogin ? 'Welcome Back' : 'Create Account'}
+              {resetMode ? 'Reset Password' : forgotPasswordView ? 'Forgot Password' : isLogin ? 'Welcome Back' : 'Create Account'}
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
-              {isLogin ? 'Sign in to access your dashboard' : 'Join ATMS to start your training journey'}
+              {resetMode
+                ? 'Enter your new password below'
+                : forgotPasswordView ? 'Enter your details to request a password reset'
+                  : isLogin ? 'Sign in to access your dashboard' : 'Join ATMS to start your training journey'}
             </p>
           </div>
 
@@ -191,139 +262,211 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
             </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-            {!isLogin && (
+
+
+          {forgotPasswordView ? (
+            <form onSubmit={handleRequestReset} className="space-y-6" noValidate>
               <Input
-                label="Full Name"
-                name="displayName"
-                type="text"
+                label="Email Address"
+                name="email"
+                type="email"
                 required
-                value={formData.displayName}
+                value={formData.email}
                 onChange={handleChange}
-                placeholder="Enter your full name"
+                placeholder="Enter your email"
               />
-            )}
 
-            <Input
-              label="Email Address"
-              name="email"
-              type="email"
-              required
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Enter your email"
-            />
+              <Button type="submit" className="w-full" size="lg" loading={loading}>
+                Send Reset Link
+              </Button>
 
-            <div className="relative">
-              <Input
-                label="Password"
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                required
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Enter your password"
-                onCopy={(e) => e.preventDefault()}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-
-            {!isLogin && (
-              <>
-                <div className="relative">
-                  <Input
-                    label="Confirm Password"
-                    name="confirmPassword"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    required
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="Confirm your password"
-                    onCopy={(e) => e.preventDefault()}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  >
-                    <option value="trainee">Trainee</option>
-                  </select>
-                </div>
-              </>
-            )}
-
-            {!isLogin && !canSignup && (
-              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 text-yellow-600 dark:text-yellow-400 px-4 py-3 rounded-lg mb-4">
-                {registrationMessage}
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setForgotPasswordView(false)}
+                  className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium"
+                >
+                  Back to Sign In
+                </button>
               </div>
-            )}
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+              {!isLogin && !resetMode && (
+                <Input
+                  label="Full Name"
+                  name="displayName"
+                  type="text"
+                  required
+                  value={formData.displayName}
+                  onChange={handleChange}
+                  placeholder="Enter your full name"
+                />
+              )}
 
-            <Button type="submit" className="w-full" size="lg" loading={loading} disabled={!isLogin && (!canSignup)}>
-              {isLogin ? 'Sign In' : 'Create Account'}
-            </Button>
-          </form>
+              {!resetMode && (
+                <Input
+                  label="Email Address"
+                  name="email"
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Enter your email"
+                />
+              )}
 
-          <div className="my-6 relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                OR
-              </span>
-            </div>
-          </div>
+              <div className="relative">
+                <Input
+                  label={resetMode ? "New Password" : "Password"}
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder={resetMode ? "Enter new password" : "Enter your password"}
+                  onCopy={(e) => e.preventDefault()}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
 
-          <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={handleGoogleSignIn} disabled={loading}>
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.19-2.37H12v4.49h6.44c-.28 1.53-1.13 2.82-2.38 3.69v3.06h3.84c2.25-2.07 3.55-5.13 3.55-8.87z" />
-              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.92-2.89l-3.84-3.06c-1.05.7-2.41 1.12-4.08 1.12-3.15 0-5.81-2.13-6.77-5H2.18v3.06C4.13 21.87 7.91 24 12 24z" />
-              <path fill="#FBBC05" d="M5.23 14.18c-.25-.76-.4-1.57-.4-2.43 0-.86.15-1.67.4-2.43v-3.06H2.18C1.57 8.44 1.17 10.11 1.17 12s.4 3.56 1.01 5.31l3.05-2.13z" />
-              <path fill="#EA4335" d="M12 5.38c1.66 0 3.13.57 4.31 1.66l3.22-3.22C17.85 2.08 15.29 1 12 1 7.91 1 4.13 3.13 2.18 7.07l3.05 2.13c.96-2.87 3.62-4.82 6.77-4.82z" />
-            </svg>
-            Continue with Google
-          </Button>
-
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors"
-            >
-              {isLogin ? (
+              {(resetMode || !isLogin) && (
                 <>
-                  Don't have an account?{' '}
-                  <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
-                    Register
-                  </strong>
-                </>
-              ) : (
-                <>
-                  Already have an account?{' '}
-                  <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
-                    Sign In
-                  </strong>
+                  <div className="relative">
+                    <Input
+                      label="Confirm Password"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      placeholder="Confirm your password"
+                      onCopy={(e) => e.preventDefault()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-8 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {!resetMode && (
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
+                      <select
+                        name="role"
+                        value={formData.role}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      >
+                        <option value="trainee">Trainee</option>
+                      </select>
+                    </div>
+                  )}
                 </>
               )}
-            </button>
-          </div>
+
+              {!isLogin && !canSignup && !resetMode && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 text-yellow-600 dark:text-yellow-400 px-4 py-3 rounded-lg mb-4">
+                  {registrationMessage}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                size="lg"
+                loading={loading}
+                disabled={(!resetMode && !isLogin && !canSignup)}
+              >
+                {resetMode ? 'Update Password' : isLogin ? 'Sign In' : 'Create Account'}
+              </Button>
+
+              {isLogin && !resetMode && (
+                <div className="flex justify-center mt-4">
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
+            </form>
+          )}
+
+          {!resetMode && !forgotPasswordView && (
+            <>
+              <div className="my-6 relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    OR
+                  </span>
+                </div>
+              </div>
+
+              <Button variant="outline" className="w-full flex items-center justify-center gap-2" onClick={handleGoogleSignIn} disabled={loading}>
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.19-2.37H12v4.49h6.44c-.28 1.53-1.13 2.82-2.38 3.69v3.06h3.84c2.25-2.07 3.55-5.13 3.55-8.87z" />
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.92-2.89l-3.84-3.06c-1.05.7-2.41 1.12-4.08 1.12-3.15 0-5.81-2.13-6.77-5H2.18v3.06C4.13 21.87 7.91 24 12 24z" />
+                  <path fill="#FBBC05" d="M5.23 14.18c-.25-.76-.4-1.57-.4-2.43 0-.86.15-1.67.4-2.43v-3.06H2.18C1.57 8.44 1.17 10.11 1.17 12s.4 3.56 1.01 5.31l3.05-2.13z" />
+                  <path fill="#EA4335" d="M12 5.38c1.66 0 3.13.57 4.31 1.66l3.22-3.22C17.85 2.08 15.29 1 12 1 7.91 1 4.13 3.13 2.18 7.07l3.05 2.13c.96-2.87 3.62-4.82 6.77-4.82z" />
+                </svg>
+                Continue with Google
+              </Button>
+
+              <div className="mt-6 text-center">
+                <button
+                  type="button"
+                  onClick={() => setIsLogin(!isLogin)}
+                  className="text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-colors"
+                >
+                  {isLogin ? (
+                    <>
+                      Don't have an account?{' '}
+                      <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                        Register
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      Already have an account?{' '}
+                      <strong className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
+                        Sign In
+                      </strong>
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
+
+          {resetMode && (
+            <div className="mt-6 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setResetMode(false);
+                  setIsLogin(true);
+                  window.history.replaceState({}, document.title, window.location.pathname);
+                }}
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition-colors"
+              >
+                Back to Login
+              </button>
+            </div>
+          )}
         </motion.div>
       </motion.div>
     </div>

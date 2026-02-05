@@ -6,7 +6,12 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
-  updateProfile
+  updateProfile,
+  sendPasswordResetEmail,
+  confirmPasswordReset,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  verifyBeforeUpdateEmail
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -29,6 +34,10 @@ interface AuthContextType {
   loginWithGoogle: (isLoginMode?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
+  sendPasswordReset: (email: string) => Promise<void>;
+  confirmResetPassword: (oobCode: string, newPassword: string) => Promise<void>;
+  reauthenticate: (password: string) => Promise<void>;
+  verifyEmailUpdate: (newEmail: string) => Promise<void>;
   approveUser?: (userId: string) => Promise<void>;
   rejectUser?: (userId: string) => Promise<void>;
 }
@@ -183,6 +192,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // --- Logout ---
   const logout = async () => await signOut(auth);
 
+  // --- Password Reset ---
+  const sendPasswordReset = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  };
+
+  const confirmResetPassword = async (oobCode: string, newPassword: string) => {
+    await confirmPasswordReset(auth, oobCode, newPassword);
+  };
+
+  // --- Re-authenticate ---
+  const reauthenticate = async (password: string) => {
+    const user = auth.currentUser;
+    if (!user || !user.email) throw new Error('No user signed in');
+    const credential = EmailAuthProvider.credential(user.email, password);
+    await reauthenticateWithCredential(user, credential);
+  };
+
+  // --- Verify & Update Email ---
+  const verifyEmailUpdate = async (newEmail: string) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('No user signed in');
+    await verifyBeforeUpdateEmail(user, newEmail);
+  };
+
   // --- Admin approves user ---
   const approveUser = async (userId: string) => {
     const pendingRef = doc(db, 'pendingUsers', userId);
@@ -211,7 +244,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userDoc = await getDoc(userRef);
 
         if (userDoc.exists()) {
-          setCurrentUser(userDoc.data() as UserWithTimestamp);
+          const userData = userDoc.data() as UserWithTimestamp;
+
+          // Sync email if verified and changed in Auth but not Firestore
+          if (firebaseUser.email && firebaseUser.email !== userData.email) {
+            await setDoc(userRef, { email: firebaseUser.email }, { merge: true });
+
+            // Also sync in pendingUsers if it exists
+            const pendingRef = doc(db, 'pendingUsers', firebaseUser.uid);
+            const pendingDoc = await getDoc(pendingRef);
+            if (pendingDoc.exists()) {
+              await setDoc(pendingRef, { email: firebaseUser.email }, { merge: true });
+            }
+
+            userData.email = firebaseUser.email;
+          }
+
+          setCurrentUser(userData);
         } else {
           setCurrentUser(null);
         }
@@ -231,6 +280,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loginWithGoogle,
     logout,
     loading,
+    sendPasswordReset,
+    confirmResetPassword,
+    reauthenticate,
+    verifyEmailUpdate,
     approveUser,
     rejectUser,
   };
