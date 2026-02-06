@@ -9,7 +9,8 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { useEffect } from "react";
-import { db } from "../../../lib/firebase";
+import { db, auth } from "../../../lib/firebase";
+import { updateProfile } from "firebase/auth";
 
 interface ProfileProps {
   currentUser: UserType | null;
@@ -47,14 +48,16 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser }) => {
 
     try {
       const userRef = doc(db, "users", currentUser.uid);
+      const authUser = auth.currentUser;
 
-      // 🔹 Update display name
-      if (displayName !== currentUser.displayName) {
+      // 🔹 Update display name in BOTH Auth and Firestore
+      if (displayName !== currentUser.displayName && authUser) {
+        await updateProfile(authUser, { displayName });
         await updateDoc(userRef, { displayName });
         toast.success("Display name updated!");
       }
 
-      // 🔹 Email change flow (SECURE)
+      // 🔹 Email change flow (requires re-authentication)
       if (email !== currentUser.email) {
         setShowReauth(true);
         setLoading(false);
@@ -76,13 +79,20 @@ export const Profile: React.FC<ProfileProps> = ({ currentUser }) => {
     setError("");
 
     try {
+      const authUser = auth.currentUser;
+      if (!authUser) throw new Error("No authenticated user");
+
       await reauthenticate(password);
       await verifyEmailUpdate(email);
 
-      // Also update display name in Firestore if it changed
+      // Update display name in BOTH Auth and Firestore if it changed
       if (displayName !== currentUser.displayName) {
+        await updateProfile(authUser, { displayName });
         await updateDoc(doc(db, "users", currentUser.uid), { displayName });
       }
+
+      // Update email in Firestore immediately (will be synced again after verification)
+      await updateDoc(doc(db, "users", currentUser.uid), { email });
 
       toast.success("Verification email sent! Check your new email.");
       setShowReauth(false);

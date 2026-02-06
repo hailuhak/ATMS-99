@@ -260,6 +260,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             userData.email = firebaseUser.email;
           }
 
+          // Sync display name if changed in Auth but not Firestore
+          if (firebaseUser.displayName && firebaseUser.displayName !== userData.displayName) {
+            await setDoc(userRef, { displayName: firebaseUser.displayName }, { merge: true });
+
+            // Also sync in pendingUsers if it exists
+            const pendingRef = doc(db, 'pendingUsers', firebaseUser.uid);
+            const pendingDoc = await getDoc(pendingRef);
+            if (pendingDoc.exists()) {
+              await setDoc(pendingRef, { displayName: firebaseUser.displayName }, { merge: true });
+            }
+
+            userData.displayName = firebaseUser.displayName;
+          }
+
           setCurrentUser(userData);
         } else {
           setCurrentUser(null);
