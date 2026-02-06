@@ -202,79 +202,155 @@ export default function GradeReport() {
           <p className="text-gray-500 dark:text-gray-400 mt-2">Waiting for trainers to submit course results.</p>
         </Card>
       ) : (
-        <Card className="overflow-hidden border-none shadow-xl shadow-gray-200/50 dark:shadow-none bg-white dark:bg-gray-800 rounded-3xl">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[1000px]">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
-                    <th className="px-6 py-5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Trainee Profile</th>
-                    <th className="px-6 py-5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Enrolled Courses</th>
-                    <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Performance</th>
-                    <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Standing</th>
-                    <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest font-black">Average (%)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {grades.map((t) => (
-                    <tr
-                      key={t.traineeId}
-                      className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-all"
-                    >
-                      <td className="px-6 py-6 min-w-[200px]">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">
-                            {t.traineeName.charAt(0)}
-                          </div>
-                          <span className="font-bold text-gray-900 dark:text-white">{t.traineeName}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-6">
-                        <div className="space-y-4">
-                          {t.courses.map((c) => (
-                            <div key={c.courseId} className="text-gray-700 dark:text-gray-300 font-semibold truncate max-w-[250px]">
-                              {c.courseTitle}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-6 text-center">
-                        <div className="space-y-4">
-                          {t.courses.map((c) => (
-                            <div key={c.courseId}>
-                              <span className="inline-flex items-center justify-center min-w-[50px] px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 font-black text-gray-900 dark:text-white">
-                                {c.grade}%
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-6 text-center">
-                        <div className="space-y-4">
-                          {t.courses.map((c) => (
-                            <div key={c.courseId} className="flex justify-center">
-                              <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${getLetterGradeColor(c.grade)}`}>
-                                {c.letterGrade}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-6 text-center">
-                        <div className="flex flex-col items-center">
-                          <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
-                            {t.average.toFixed(1)}%
-                          </span>
-                          <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">Weighted Mean</span>
-                        </div>
-                      </td>
+        <div className="space-y-6">
+          {/* Desktop View */}
+          <Card className="hidden md:block overflow-hidden border-none shadow-xl shadow-gray-200/50 dark:shadow-none bg-white dark:bg-gray-800 rounded-3xl">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                      <th className="px-6 py-5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                        Trainee Profile
+                      </th>
+                      <th className="px-6 py-5 text-left text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                        Enrolled Courses
+                      </th>
+                      <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                        Grade(100%)
+                      </th>
+                      <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
+                        L/Grade
+                      </th>
+                      <th className="px-6 py-5 text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest font-black">
+                        Average (%)
+                      </th>
                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {grades.map((t) => (
+                      <tr
+                        key={t.traineeId}
+                        className="hover:bg-gray-50/50 dark:hover:bg-white/5 transition-all"
+                      >
+                        <td className="px-6 py-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">
+                              {t.traineeName.charAt(0)}
+                            </div>
+                            <span className="font-bold text-gray-900 dark:text-white">
+                              {t.traineeName}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-6">
+                          <div className="space-y-4">
+                            {t.courses.map((c) => (
+                              <div
+                                key={c.courseId}
+                                className="text-gray-700 dark:text-gray-300 font-semibold truncate max-w-[250px]"
+                              >
+                                {c.courseTitle}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-6 text-center">
+                          <div className="space-y-4">
+                            {t.courses.map((c) => (
+                              <div key={c.courseId}>
+                                <span className="inline-flex items-center justify-center min-w-[50px] px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 font-black text-gray-900 dark:text-white">
+                                  {c.grade}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-6 text-center">
+                          <div className="space-y-4">
+                            {t.courses.map((c) => (
+                              <div key={c.courseId} className="flex justify-center">
+                                <span
+                                  className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${getLetterGradeColor(
+                                    c.grade
+                                  )}`}
+                                >
+                                  {c.letterGrade}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-6 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                              {t.average.toFixed(1)}%
+                            </span>
+                           
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Mobile View */}
+          <div className="grid grid-cols-1 gap-6 md:hidden">
+            {grades.map((t) => (
+              <Card
+                key={t.traineeId}
+                className="bg-white dark:bg-gray-800 shadow-xl shadow-gray-200/50 dark:shadow-none border-none rounded-2xl overflow-hidden"
+              >
+                <div className="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">
+                      {t.traineeName.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 dark:text-white">{t.traineeName}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Trainee</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-xl font-black text-blue-600 dark:text-blue-400">
+                      {t.average.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Avg</span>
+                  </div>
+                </div>
+                <CardContent className="p-5 space-y-4">
+                  {t.courses.map((c) => (
+                    <div
+                      key={c.courseId}
+                      className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30"
+                    >
+                      <div className="flex-1 min-w-0 mr-4">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                          {c.courseTitle}
+                        </p>
+                        <span
+                          className={`inline-flex mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getLetterGradeColor(
+                            c.grade
+                          )}`}
+                        >
+                          {c.letterGrade}
+                        </span>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <span className="font-black text-gray-900 dark:text-white bg-white dark:bg-gray-600 px-3 py-1.5 rounded-lg shadow-sm">
+                          {c.grade}%
+                        </span>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

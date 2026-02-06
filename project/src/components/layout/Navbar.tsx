@@ -12,7 +12,7 @@ export const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
 
   const [pendingUsers, setPendingUsers] = useState(0);
-  const [trainerNotifications, setTrainerNotifications] = useState<Set<string>>(new Set());
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showReauthModal, setShowReauthModal] = useState(false);
@@ -35,32 +35,46 @@ export const Navbar: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Fetch trainer notifications
+  const [pendingGradesCount, setPendingGradesCount] = useState(0);
+
+  // Fetch pending grades count
   useEffect(() => {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'trainer')) return;
-    const unsubscribeGrades = onSnapshot(collection(db, 'grades'), gradesSnapshot => {
-      const unsubscribeFinal = onSnapshot(collection(db, 'finalGrade'), finalSnapshot => {
-        const gradesByTrainee: { [key: string]: any } = {};
-        const finalGradesByTrainee: { [key: string]: any } = {};
 
+    // Subscribe to grades submission
+    const unsubscribeGrades = onSnapshot(collection(db, 'grades'), gradesSnapshot => {
+      // Subscribe to finalized grades
+      const unsubscribeFinal = onSnapshot(collection(db, 'finalGrade'), finalSnapshot => {
+        const gradesByTrainee: { [key: string]: number } = {};
+        const finalGradesByTrainee: { [key: string]: number } = {};
+
+        // Store submitted grades with their values
         gradesSnapshot.docs.forEach(doc => {
           const data = doc.data();
           const key = `${data.traineeId}_${data.courseId}`;
-          gradesByTrainee[key] = data;
+          gradesByTrainee[key] = data.grade;
         });
 
+        // Store finalized grades with their values
         finalSnapshot.docs.forEach(doc => {
           const data = doc.data();
           if (Array.isArray(data.courses)) {
             data.courses.forEach((course: any) => {
               const key = `${data.traineeId}_${course.courseId}`;
-              finalGradesByTrainee[key] = true;
+              finalGradesByTrainee[key] = course.grade;
             });
           }
         });
 
-        const unsavedCount = Object.keys(gradesByTrainee).filter(key => !finalGradesByTrainee[key]).length;
-        setTrainerNotifications(unsavedCount > 0 ? new Set(['admin']) : new Set());
+        // Count if key is missing in final OR if value is different (updated)
+        // This ensures distinct notifications count for every change
+        const unsavedCount = Object.keys(gradesByTrainee).filter(key => {
+          const submittedGrade = gradesByTrainee[key];
+          const finalizedGrade = finalGradesByTrainee[key];
+          return finalizedGrade === undefined || submittedGrade !== finalizedGrade;
+        }).length;
+
+        setPendingGradesCount(unsavedCount);
       });
       return () => unsubscribeFinal();
     });
@@ -201,7 +215,7 @@ export const Navbar: React.FC = () => {
     }
   };
 
-  const gradeCount = trainerNotifications.size;
+
 
   return (
     <>
@@ -240,8 +254,10 @@ export const Navbar: React.FC = () => {
 
                 <Button variant="ghost" size="sm" className="relative hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full h-10 w-10 flex items-center justify-center p-0">
                   <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                  {(pendingUsers > 0 || gradeCount > 0) && (
-                    <span className="absolute top-2 right-2 bg-red-500 w-2 h-2 rounded-full border-2 border-white dark:border-gray-800"></span>
+                  {(pendingUsers + pendingGradesCount) > 0 && (
+                    <span className="absolute top-1 right-0.5 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white dark:border-gray-800">
+                      {pendingUsers + pendingGradesCount}
+                    </span>
                   )}
                 </Button>
 
@@ -252,24 +268,53 @@ export const Navbar: React.FC = () => {
                 <div className="h-8 w-[1px] bg-gray-200 dark:bg-gray-700 mx-1" />
               </div>
 
-              {/* 2. Profile Image (All Devices) */}
-              <div className="relative group shrink-0">
-                <label htmlFor="profile-upload-nav" className="cursor-pointer block transition-transform active:scale-95">
-                  {profileImage ? (
-                    <img src={profileImage} alt="Profile" className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover ring-2 ring-blue-500/20 hover:ring-blue-500/40 transition-all" />
-                  ) : (
-                    <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
-                      <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                    </div>
-                  )}
+              {/* 2. Profile (Desktop shows name + role, Mobile only image) */}
+              <div className="flex items-center space-x-3 shrink-0">
+
+                {/* Profile Image */}
+                <div className="relative group">
+                  <label htmlFor="profile-upload-nav" className="cursor-pointer block">
+                    {profileImage ? (
+                      <img
+                        src={profileImage}
+                        alt="Profile"
+                        className="w-9 h-9 sm:w-11 sm:h-11 rounded-full object-cover ring-2 ring-blue-500/20 hover:ring-blue-500/40 transition-all"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                      </div>
+                    )}
+                  </label>
+
                   {uploading && (
                     <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
                       <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
                     </div>
                   )}
-                </label>
-                <input id="profile-upload-nav" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+
+                  <input
+                    id="profile-upload-nav"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                    disabled={uploading}
+                  />
+                </div>
+
+                {/* Name + Role (Desktop only) */}
+                <div className="hidden lg:block leading-tight">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {currentUser?.displayName || "User"}
+                  </p>
+                  <p className="text-xs text-blue-500 font-bold">
+                    {currentUser?.role || "No role"}
+                  </p>
+                </div>
+
               </div>
+
 
               {/* 3. Logout (All Devices) */}
               <Button variant="ghost" size="sm" className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-full h-8 w-8 sm:h-10 sm:w-10 p-0 flex items-center justify-center" onClick={handleLogout}>

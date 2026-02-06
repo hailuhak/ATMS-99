@@ -444,13 +444,15 @@ export const UserManagement: React.FC = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-3 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button
-                                disabled={disableEdit}
-                                className={`p-2 rounded-lg transition-colors ${disableEdit ? "text-gray-300 dark:text-gray-700 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"}`}
-                                onClick={() => !disableEdit && setEditingUser(user)}
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
+                              {user.uid === currentUser?.uid && (
+                                <button
+                                  disabled={disableEdit}
+                                  className={`p-2 rounded-lg transition-colors ${disableEdit ? "text-gray-300 dark:text-gray-700 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"}`}
+                                  onClick={() => !disableEdit && setEditingUser(user)}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 disabled={disableDelete}
                                 className={`p-2 rounded-lg transition-colors ${disableDelete ? "text-gray-300 dark:text-gray-700 cursor-not-allowed" : "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"}`}
@@ -484,12 +486,14 @@ export const UserManagement: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button
-                          className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-blue-500 active:scale-90 transition-transform"
-                          onClick={() => setEditingUser(user)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        {user.uid === currentUser?.uid && (
+                          <button
+                            className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-blue-500 active:scale-90 transition-transform"
+                            onClick={() => setEditingUser(user)}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-red-500 active:scale-90 transition-transform"
                           onClick={() => handleDeleteUser(user)}

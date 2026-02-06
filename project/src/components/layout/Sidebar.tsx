@@ -21,10 +21,15 @@ interface SidebarProps {
   onSectionChange: (section: string) => void;
 }
 
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+
 export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange }) => {
   const { currentUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingGradesCount, setPendingGradesCount] = useState(0);
 
   // Update on resize
   useEffect(() => {
@@ -38,13 +43,70 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // 🔹 Real-time pending user count
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+
+    const q = query(collection(db, 'users'), where('role', '==', 'pending'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPendingCount(snapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // 🔹 Real-time pending grades count
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+
+    const unsubscribeGrades = onSnapshot(collection(db, 'grades'), (gradesSnapshot) => {
+      const unsubscribeFinal = onSnapshot(collection(db, 'finalGrade'), (finalSnapshot) => {
+        const gradesByTrainee: { [key: string]: number } = {};
+        const finalGradesByTrainee: { [key: string]: number } = {};
+
+        // Store submitted grades with their values
+        gradesSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          const key = `${data.traineeId}_${data.courseId}`;
+          gradesByTrainee[key] = data.grade;
+        });
+
+        // Store finalized grades with their values
+        finalSnapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          if (Array.isArray(data.courses)) {
+            data.courses.forEach((course: any) => {
+              const key = `${data.traineeId}_${course.courseId}`;
+              finalGradesByTrainee[key] = course.grade;
+            });
+          }
+        });
+
+        // Count if key is missing in final OR if value is different (updated)
+        const unsavedCount = Object.keys(gradesByTrainee).filter((key) => {
+          const submittedGrade = gradesByTrainee[key];
+          const finalizedGrade = finalGradesByTrainee[key];
+
+          // Pending if not finalized yet OR if the grade value has changed
+          return finalizedGrade === undefined || submittedGrade !== finalizedGrade;
+        }).length;
+
+        setPendingGradesCount(unsavedCount);
+      });
+
+      return () => unsubscribeFinal();
+    });
+
+    return () => unsubscribeGrades();
+  }, [currentUser]);
+
   const allMenuItems = [
     { id: 'dashboard', label: 'Home', icon: House },
     { id: 'users', label: 'User Management', icon: Users, roles: ['admin'] },
-    { id: 'pending-users', label: 'Pending Users', icon: UserCheck, roles: ['admin'] },
+    { id: 'pending-users', label: 'Pending Users', icon: UserCheck, roles: ['admin'], badge: pendingCount },
     { id: 'sessions', label: 'Sessions', icon: Calendar, roles: ['admin'] },
     { id: 'courses', label: 'Course Management', icon: BookOpen, roles: ['admin'] },
-    { id: 'grades', label: 'Grades', icon: BarChart3, roles: ['admin'] },
+    { id: 'grades', label: 'Grades', icon: BarChart3, roles: ['admin'], badge: pendingGradesCount },
     { id: 'activities', label: 'Activity Logs', icon: FileText, roles: ['admin'] },
 
     { id: 'courses', label: 'My Courses', icon: BookOpen, roles: ['trainer'] },
@@ -124,17 +186,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange
                       if (isMobile) setIsOpen(false);
                     }}
                     className={clsx(
-                      'w-full flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group relative',
+                      'w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group relative',
                       activeSection === item.id
                         ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shadow-sm'
                         : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-700/50 hover:text-blue-600 dark:hover:text-blue-400'
                     )}
                   >
-                    <item.icon className={clsx(
-                      "w-5 h-5 mr-3 transition-transform duration-200 group-hover:scale-110",
-                      activeSection === item.id ? "text-blue-600 dark:text-blue-400" : "text-gray-400 group-hover:text-blue-500"
-                    )} />
-                    <span>{item.label}</span>
+                    <div className="flex items-center">
+                      <item.icon className={clsx(
+                        "w-5 h-5 mr-3 transition-transform duration-200 group-hover:scale-110",
+                        activeSection === item.id ? "text-blue-600 dark:text-blue-400" : "text-gray-400 group-hover:text-blue-500"
+                      )} />
+                      <span>{item.label}</span>
+                    </div>
+
+                    {/* Notification Badge */}
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                        {item.badge}
+                      </span>
+                    )}
+
                     {activeSection === item.id && (
                       <motion.div
                         layoutId="activeTab"

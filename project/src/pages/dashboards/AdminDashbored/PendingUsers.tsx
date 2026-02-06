@@ -3,6 +3,7 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { CheckCircle, Circle as XCircle, Clock } from "lucide-react";
 import { db, auth } from "../../../lib/firebase";
+import emailjs from '@emailjs/browser';
 import {
   collection,
   onSnapshot,
@@ -15,7 +16,11 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
+// EMAILJS CONFIGURATION
+// TODO: Replace these with your actual EmailJS keys from https://dashboard.emailjs.com/
+const EMAILJS_SERVICE_ID: string = "service_s69iwbi";
+const EMAILJS_TEMPLATE_ID: string = "template_y42cvsh";
+const EMAILJS_PUBLIC_KEY: string = "Sgx2WZyLd0TrIJbid";
 
 interface PendingUser {
   uid: string;
@@ -93,6 +98,38 @@ export const PendingUsers: React.FC = () => {
     }
   };
 
+  // 🔹 Send Email Utility
+  const sendEmailNotification = async (
+    user: PendingUser,
+    subject: string,
+    message: string,
+    actionType: "approve" | "reject"
+  ) => {
+    try {
+
+
+      const templateParams = {
+        name: user.displayName,
+        to_email: user.email,
+        subject: subject,
+        message: message,
+        action_type: actionType,
+      };
+
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        templateParams,
+        EMAILJS_PUBLIC_KEY
+      );
+
+      console.log("✅ Email sent successfully via EmailJS");
+    } catch (error) {
+      console.error("❌ Failed to send email via EmailJS:", error);
+      alert("❌ Failed to send email. Check console for details.");
+    }
+  };
+
   // 🔹 Approve user
   const handleApprove = async () => {
     if (!selectedUser) return;
@@ -119,22 +156,13 @@ export const PendingUsers: React.FC = () => {
       // Log activity
       await addActivityLog("approved", selectedUser, approvalMessage);
 
-      // Send email via cloud function
-      const functions = getFunctions();
-      const sendEmail = httpsCallable(functions, "handleUserAction");
-      try {
-        await sendEmail({
-          pendingUserId: selectedUser.uid,
-          to_name: selectedUser.displayName,
-          to_email: selectedUser.email,
-          message:
-            approvalMessage ||
-            "Your account has been approved. You can now access the system.",
-          action: "approve",
-        });
-      } catch (emailError) {
-        console.error("Email sending failed:", emailError);
-      }
+      // Send email via EmailJS
+      await sendEmailNotification(
+        selectedUser,
+        "Your account has been approved",
+        approvalMessage || "Your account has been approved. You can now access the system.",
+        "approve"
+      );
 
       alert(`User ${selectedUser.displayName} approved successfully!`);
       setShowApprovalForm(false);
@@ -165,20 +193,13 @@ export const PendingUsers: React.FC = () => {
       // Log activity
       await addActivityLog("rejected", selectedUser, rejectionMessage);
 
-      // Send email via cloud function
-      const functions = getFunctions();
-      const sendEmail = httpsCallable(functions, "handleUserAction");
-      try {
-        await sendEmail({
-          pendingUserId: selectedUser.uid,
-          to_name: selectedUser.displayName,
-          to_email: selectedUser.email,
-          message: rejectionMessage || "Your account registration has been rejected.",
-          action: "reject",
-        });
-      } catch (emailError) {
-        console.error("Email sending failed:", emailError);
-      }
+      // Send email via EmailJS
+      await sendEmailNotification(
+        selectedUser,
+        "Your account has been rejected",
+        rejectionMessage || "Your account registration has been rejected.",
+        "reject"
+      );
 
       alert(`User ${selectedUser.displayName} rejected.`);
       setShowRejectionForm(false);
